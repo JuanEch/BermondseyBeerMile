@@ -312,7 +312,7 @@ let myCounts=null, dirty=false, writing=false, writeTimer=null;
 let openStop=null, lbPhoto=null, zipping=false;
 
 const countsFor = p => (p.id===myId && myCounts) ? myCounts : (p.counts||{});
-function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||myName||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,selfie:mySelfie||people.find(p=>p.id===myId)?.selfie,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
+function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||dirty||writing||writeTimer||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,selfie:mySelfie||people.find(p=>p.id===myId)?.selfie,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
 const stopTotal = id => allPeople().reduce((n,p)=>n+(+countsFor(p)[id]||0),0);
 const photosFor = id => photos.filter(p=>p.stop===id);
 const photoUrl = p => sb.storage.from("photos").getPublicUrl(p.path).data.publicUrl;
