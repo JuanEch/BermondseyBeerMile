@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Beer Mile, backwards</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍺</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1EB; --surface:#FFFFFF; --ink:#1C2B25; --muted:#5B6B64; --line:#C9D1CB;
+  --beer:#E3A21A; --beer-ink:#8A5A00; --foam:#FFF6DD; --arch:#D8DED9;
+  --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
+  color-scheme: light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#18221E; --surface:#212D28; --ink:#ECEFE7; --muted:#9FAEA6; --line:#34433C;
+    --beer:#F2B632; --beer-ink:#F2B632; --foam:#2E3A2A; --arch:#26332D;
+    color-scheme: dark;
+  }
+}
+html{scroll-padding-top:calc(env(safe-area-inset-top,0px) + 150px)}
+*,*::before,*::after{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.5 var(--body);-webkit-text-size-adjust:100%}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--bg)}
+button,input{font:inherit;color:inherit}
+a{color:var(--beer-ink)}
+:focus-visible{outline:3px solid var(--beer);outline-offset:2px}
+.wrap{max-width:560px;margin:0 auto;padding:0 18px}
+header.top{padding:22px 0 6px}
+h1{font-family:var(--display);font-weight:800;font-size:clamp(2rem,9vw,2.8rem);line-height:1;letter-spacing:-.02em;margin:0}
+.sub{color:var(--muted);margin:.4rem 0 0}
+.status{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:12px 0 14px;border-bottom:1px solid var(--line)}
+.now{font-family:var(--display);font-weight:700;font-size:1.35rem;line-height:1.2;margin:0}
+.next{margin:.15rem 0 .7rem;color:var(--muted)}
+.next strong{color:var(--ink)}
+.actions{display:flex;gap:8px}
+.btn{border:0;border-radius:999px;padding:.7rem 1.1rem;cursor:pointer;font-weight:700;min-height:44px}
+.btn-main{flex:1;background:var(--beer);color:#231700}
+.btn-quiet{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.note{font-size:.9rem;color:var(--muted);margin:.5rem 0 0}
+.note:empty{display:none}
+.route{list-style:none;margin:18px 0 8px;padding:0;position:relative}
+.route::before{content:"";position:absolute;left:6px;width:34px;top:14px;bottom:14px;border-radius:6px;
+  background:radial-gradient(circle at 50% 100%, var(--bg) 0 8px, transparent 8.5px) 0 0/34px 26px repeat-y, var(--arch);}
+.stop{position:relative;display:grid;grid-template-columns:46px 1fr;gap:12px;align-items:start}
+.track{position:absolute;left:21px;width:4px;top:0;bottom:0;background:repeating-linear-gradient(var(--muted) 0 6px,transparent 6px 12px);opacity:.55}
+.stop:first-child .track{top:22px}
+.stop:last-child .track{bottom:calc(100% - 22px)}
+.stop.done .track{background:var(--beer);opacity:1}
+.stop.current .track{background:linear-gradient(var(--beer) 0 22px, transparent 22px), repeating-linear-gradient(var(--muted) 0 6px,transparent 6px 12px);opacity:1}
+.pin{position:relative;z-index:1;margin:6px 0 0 6px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
+  font-family:var(--display);font-weight:800;font-size:.9rem;background:var(--surface);border:2.5px solid var(--muted);color:var(--ink)}
+.done .pin{background:var(--beer);border-color:var(--beer);color:#231700}
+.current .pin{background:var(--beer);border-color:var(--ink);color:#231700;transform:scale(1.18);box-shadow:0 0 0 5px color-mix(in srgb,var(--beer) 35%,transparent)}
+.upcoming .pin{border-color:var(--beer);border-width:3px}
+@media (prefers-reduced-motion:no-preference){
+  .current .pin{animation:pulse 2.2s ease-in-out infinite}
+  @keyframes pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--beer) 12%,transparent)}}
+}
+.card{all:unset;display:block;cursor:pointer;padding:8px 12px 10px;margin:2px 0;border-radius:12px;width:100%;box-sizing:border-box}
+.card:focus-visible{outline:3px solid var(--beer)}
+.current .card{background:var(--surface);box-shadow:inset 4px 0 0 var(--beer)}
+.name{font-family:var(--display);font-weight:700;font-size:1.08rem;line-height:1.25;display:block}
+.addr{color:var(--muted);font-size:.92rem;display:block}
+.meta{display:flex;gap:12px;font-size:.85rem;color:var(--muted);margin-top:2px}
+.meta:empty{display:none}
+.walk{font-size:.8rem;color:var(--muted);padding:0 12px 6px;display:block}
+.tag{font-size:.78rem;font-weight:700;color:var(--beer-ink)}
+section.board{margin:26px 0 30px}
+h2{font-family:var(--display);font-weight:700;font-size:1.4rem;margin:0 0 .6rem}
+.people{list-style:none;padding:0;margin:0}
+.people li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
+.people .n{flex:1}
+.people .c{font-family:var(--display);font-weight:800;font-size:1.2rem}
+.empty{color:var(--muted)}
+dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;border-radius:20px 20px 0 0;background:var(--surface);color:var(--ink)}
+dialog.sheet::backdrop,dialog.ask::backdrop{background:rgba(0,0,0,.45)}
+.sheet-in{padding:16px 18px calc(22px + env(safe-area-inset-bottom,0px));overflow:auto;max-height:inherit}
+.sheet-head{display:flex;align-items:flex-start;gap:10px}
+.sheet-head h3{font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1.1;margin:0;flex:1}
+.x{border:0;background:var(--bg);border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:1.2rem}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:.8rem 0}
+.counter{display:flex;align-items:center;gap:6px;background:var(--foam);border-radius:999px;padding:4px}
+.counter button{width:44px;height:44px;border-radius:50%;border:0;background:var(--surface);cursor:pointer;font-size:1.4rem;font-weight:700}
+.counter output{min-width:2.2ch;text-align:center;font-family:var(--display);font-weight:800;font-size:1.5rem}
+.photos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:.6rem 0}
+.photos button{all:unset;cursor:pointer;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg)}
+.photos img{width:100%;height:100%;object-fit:cover;display:block}
+.upload{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.upload input{position:absolute;width:1px;height:1px;opacity:0}
+h4{font-family:var(--display);font-size:1.05rem;margin:1.2rem 0 .2rem}
+dialog.lightbox{border:0;padding:0;background:transparent;max-width:96vw;max-height:92vh}
+dialog.lightbox::backdrop{background:rgba(0,0,0,.85)}
+dialog.lightbox img{max-width:96vw;max-height:80vh;display:block;border-radius:10px}
+.lb-bar{display:flex;justify-content:space-between;align-items:center;gap:10px;color:#fff;padding:10px 2px}
+.lb-bar .btn-quiet{color:#fff;border-color:#fff8}
+dialog.ask{border:0;border-radius:18px;padding:20px;background:var(--surface);color:var(--ink);width:min(92vw,400px)}
+dialog.ask h3{font-family:var(--display);margin:0 0 .4rem;font-size:1.4rem}
+dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);margin:.6rem 0 1rem}
+.toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:12px;max-width:90vw;z-index:50;font-size:.95rem}
+.toast[hidden]{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>Beer Mile, backwards</h1>
+    <p class="sub">From The Kernel to Maltby Street, under the Bermondsey arches. Tap any stop to count drinks and add photos.</p>
+  </header>
+  <div class="status">
+    <p class="now" id="now">Not started yet</p>
+    <p class="next" id="next"></p>
+    <div class="actions">
+      <button class="btn btn-main" id="advance">We’re at The Kernel</button>
+      <button class="btn btn-quiet" id="undo" aria-label="Go back one stop">Undo</button>
+    </div>
+    <p class="note" id="note"></p>
+  </div>
+  <ol class="route" id="route" aria-label="Crawl route"></ol>
+  <section class="board">
+    <h2>Drinks so far</h2>
+    <p class="empty" id="boardTotal"></p>
+    <ul class="people" id="people"></ul>
+  </section>
+  <section class="board">
+    <h2>Photos</h2>
+    <p class="empty" id="photoCount">No photos yet.</p>
+    <button class="btn btn-main" id="dlAll" hidden>Download all photos</button>
+    <p class="note" id="dlNote"></p>
+    <p class="note" id="meLine"></p>
+  </section>
+</div>
+
+<dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></dialog>
+<dialog class="lightbox" id="lightbox">
+  <div class="lb-bar"><span id="lbBy"></span><span style="display:flex;gap:8px"><button class="btn btn-quiet" id="lbDel" hidden>Remove</button><button class="btn btn-quiet" id="lbClose">Close</button></span></div>
+  <img id="lbImg" alt="">
+</dialog>
+<dialog class="ask" id="ask">
+  <form method="dialog" id="askForm">
+    <h3>What should we call you?</h3>
+    <p class="note">Shown next to your drinks and photos. No sign-up needed.</p>
+    <input id="askName" maxlength="24" autocomplete="nickname" required placeholder="Your name">
+    <div class="actions"><button class="btn btn-quiet" value="cancel" formnovalidate>Cancel</button><button class="btn btn-main" value="ok">Save</button></div>
+  </form>
+</dialog>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script>
+// ===== Paste your two Supabase values here =====
+const SUPABASE_URL = "https://kawvtiekoicvwpokxmqn.supabase.co";
+const SUPABASE_KEY = "sb_publishable_0hD7OiLg3q8aEiJOZ8DTSg_3h1fmJmT";
+// ===============================================
+
+const STOPS = [
+  {id:"kernel",   name:"The Kernel",                        addr:"132 Spa Road",        walk:140, brews:true},
+  {id:"mash",     name:"Mash Paddle Brewery",               addr:"92 Enid Street",      walk:25,  brews:true},
+  {id:"enidtav",  name:"Enid Street Tavern",                addr:"87 Enid Street",      walk:13},
+  {id:"cbj",      name:"Craft Beer Junction",               addr:"86 Enid Street",      walk:19},
+  {id:"bianca",   name:"Bianca Road",                       addr:"82–84 Enid Street",   walk:65,  brews:true},
+  {id:"atg",      name:"Against The Grain Cidery",          addr:"76 Enid Street",      walk:10,  brews:true},
+  {id:"cloud",    name:"Cloudwater",                        addr:"73 Enid Street",      walk:10},
+  {id:"bighug",   name:"Big Hug Social",                    addr:"72 Enid Street",      walk:43},
+  {id:"dutch",    name:"It Ain’t Much If It Ain’t Dutch",   addr:"67–68 Enid Street",   walk:180},
+  {id:"anspach",  name:"Anspach & Hobday",                  addr:"118 Druid Street",    walk:150},
+  {id:"hiver",    name:"Hiver",                             addr:"56 Stanworth Street", walk:81},
+  {id:"billy",    name:"Billy Franks Craft Beer & Snack Shack", addr:"104 Druid Street", walk:58},
+  {id:"fabal",    name:"Fabal Beerhall",                    addr:"88 Druid Street",     walk:21},
+  {id:"barrel",   name:"The Barrel Project",                addr:"80 Druid Street",     walk:90, approx:true},
+  {id:"doodle",   name:"The Doodle Bar",                    addr:"60 Druid Street",     walk:70, approx:true, extra:"Chalkboard walls: leave your mark."},
+  {id:"kanpai",   name:"Kanpai Taproom & Kitchen",          addr:"48 Druid Street",     walk:3,   brews:true},
+  {id:"southwark",name:"Southwark Brewing",                 addr:"46 Druid Street",     walk:170, brews:true},
+  {id:"maltby",   name:"Maltby Street Market",              addr:"Ropewalk",            extra:"The finish: food stalls and a couple of bars."},
+];
+const MAPS = s => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(s.name + ", " + s.addr + ", Bermondsey, London");
+
+const $=id=>document.getElementById(id);
+function h(tag, attrs={}, ...kids){
+  const el=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs)){
+    if(v==null||v===false) continue;
+    if(k.startsWith("on")) el.addEventListener(k.slice(2),v);
+    else if(k==="text") el.textContent=v;
+    else el.setAttribute(k, v===true?"":v);
+  }
+  for(const k of kids.flat()){ if(k==null||k===false) continue; el.append(k.nodeType?k:document.createTextNode(k)); }
+  return el;
+}
+let toastT;
+function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3500); }
+
+// ---- Local identity (no login) ----
+const store={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
+let myId=store.get("bm_id"); if(!myId){ myId=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now()); store.set("bm_id",myId); }
+let myName=store.get("bm_name")||"";
+function askName(){
+  return new Promise(res=>{
+    if(myName) return res(true);
+    const d=$("ask"); $("askName").value="";
+    d.onclose=()=>{
+      const v=$("askName").value.trim();
+      if(d.returnValue==="ok" && v){ myName=v; store.set("bm_name",v); renderMe(); flushSoon(); res(true); } else res(false);
+    };
+    d.showModal();
+  });
+}
+function renderMe(){
+  const m=$("meLine"); m.textContent="";
+  if(myName) m.append(`You’re “${myName}” on this phone. `, h("a",{href:"#",onclick:e=>{e.preventDefault(); myName=""; askName();},text:"Change name"}));
+}
+
+// ---- State ----
+const configured=!SUPABASE_URL.startsWith("PASTE") && !SUPABASE_KEY.startsWith("PASTE");
+const sb = configured && window.supabase ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
+let current=-1, people=[], photos=[];
+let myCounts=null, dirty=false, writing=false, writeTimer=null;
+let openStop=null, lbPhoto=null, zipping=false;
+
+const countsFor = p => (p.id===myId && myCounts) ? myCounts : (p.counts||{});
+function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
+const stopTotal = id => allPeople().reduce((n,p)=>n+(+countsFor(p)[id]||0),0);
+const photosFor = id => photos.filter(p=>p.stop===id);
+const photoUrl = p => sb.storage.from("photos").getPublicUrl(p.path).data.publicUrl;
+
+function render(){
+  renderStatus(); renderRoute(); renderBoard(); renderPhotoBox();
+  if(openStop!=null && $("sheet").open) renderSheet();
+}
+function renderStatus(){
+  const last=STOPS.length-1, nxt=current+1<=last?STOPS[current+1]:null;
+  $("now").textContent = current<0 ? "Not started yet" : (current===last ? "Finished at " + STOPS[last].name : "Now at " + STOPS[current].name);
+  const ne=$("next"); ne.textContent="";
+  if(nxt){ ne.append("Next: ", h("strong",{text:nxt.name})); if(current>=0&&STOPS[current].walk) ne.append(", "+(STOPS[current].approx?"about ":"")+STOPS[current].walk+" m away"); }
+  else ne.textContent="That’s the lot. Get some food.";
+  $("advance").textContent = current<0 ? "We’re at "+STOPS[0].name : (nxt ? "Arrived at "+nxt.name : "Crawl complete");
+  $("advance").disabled = !nxt || !sb;
+  $("undo").disabled = current<0 || !sb;
+}
+function renderRoute(){
+  const ol=$("route"); ol.textContent="";
+  STOPS.forEach((s,i)=>{
+    const cls=i<current?"done":i===current?"current":i===current+1?"upcoming":"";
+    const ph=photosFor(s.id).length, dr=stopTotal(s.id);
+    const meta=h("span",{class:"meta"}); if(dr) meta.append(h("span",{text:"🍺 "+dr})); if(ph) meta.append(h("span",{text:"📷 "+ph}));
+    ol.append(h("li",{class:"stop "+cls},
+      h("span",{class:"track","aria-hidden":"true"}),
+      h("span",{class:"pin","aria-hidden":"true",text:String(i+1)}),
+      h("div",{},
+        h("button",{class:"card",onclick:()=>openSheet(i),"aria-label":`Stop ${i+1}: ${s.name}${i===current?", you are here":""}`},
+          h("span",{class:"name",text:s.name}),
+          h("span",{class:"addr"}, s.addr, i===current?h("span",{class:"tag",text:"  You’re here"}):null, i===current+1?h("span",{class:"tag",text:"  Next"}):null),
+          meta),
+        s.walk&&i<STOPS.length-1?h("span",{class:"walk",text:"↓ "+(s.approx?"about ":"")+s.walk+" m walk"}):null)));
+  });
+}
+function renderBoard(){
+  const rows=allPeople().map(p=>({id:p.id,name:p.id===myId?myName:p.nickname,n:Object.values(countsFor(p)).reduce((a,b)=>a+(+b||0),0)})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+  const grand=rows.reduce((a,r)=>a+r.n,0);
+  $("boardTotal").textContent = grand ? `${grand} drink${grand===1?"":"s"} between you.` : "No drinks logged yet. Open a stop and tap + after each one.";
+  const ul=$("people"); ul.textContent="";
+  for(const r of rows) ul.append(h("li",{},h("span",{class:"n",text:(r.name||"Someone")+(r.id===myId?" (you)":"")}),h("span",{class:"c",text:String(r.n)})));
+}
+function renderPhotoBox(){
+  const n=photos.length, stops=new Set(photos.map(p=>p.stop)).size;
+  $("photoCount").textContent = n ? `${n} photo${n===1?"":"s"} across ${stops} stop${stops===1?"":"s"}.` : "No photos yet. Open a stop to add one.";
+  const b=$("dlAll"); b.hidden=!n||!window.JSZip; b.disabled=zipping;
+  b.textContent = zipping ? "Packing photos…" : `Download all ${n} photo${n===1?"":"s"} (.zip)`;
+}
+
+function openSheet(i){ openStop=i; renderSheet(); if(!$("sheet").open) $("sheet").showModal(); }
+$("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").close(); });
+$("sheet").addEventListener("close",()=>{ openStop=null; });
+function renderSheet(){
+  const i=openStop, s=STOPS[i], box=$("sheetIn");
+  const mine=+((myCounts||people.find(p=>p.id===myId)?.counts||{})[s.id])||0, group=stopTotal(s.id), list=photosFor(s.id);
+  box.textContent="";
+  box.append(
+    h("div",{class:"sheet-head"},h("h3",{id:"sheetTitle",text:s.name}),h("button",{class:"x","aria-label":"Close",onclick:()=>$("sheet").close(),text:"✕"})),
+    h("p",{class:"addr"}, s.addr+". ", h("a",{href:MAPS(s),target:"_blank",rel:"noopener",text:"Directions"})),
+    s.extra?h("p",{text:s.extra}):null,
+    s.brews?h("p",{class:"note",text:"Brews on site."}):null);
+  if(sb && i!==current) box.append(h("div",{class:"row"},h("button",{class:"btn btn-quiet",onclick:()=>setCurrent(i),text:"Mark as where we are"})));
+  box.append(h("h4",{text:"Drinks here"}),
+    h("div",{class:"row"},
+      h("div",{class:"counter"},
+        h("button",{"aria-label":"One fewer",onclick:()=>bump(s.id,-1),disabled:mine<=0||!sb,text:"−"}),
+        h("output",{"aria-live":"polite",text:String(mine)}),
+        h("button",{"aria-label":"One more",onclick:()=>bump(s.id,1),disabled:!sb,text:"+"})),
+      h("span",{class:"note",text:`Yours. Group total here: ${group}.`})));
+  box.append(h("h4",{text:`Photos${list.length?` (${list.length})`:""}`}));
+  if(list.length){
+    const grid=h("div",{class:"photos"});
+    for(const p of list) grid.append(h("button",{"aria-label":"Open photo",onclick:()=>openPhoto(p)},h("img",{src:photoUrl(p),alt:"Photo at "+s.name,loading:"lazy"})));
+    box.append(grid);
+  } else box.append(h("p",{class:"note",text:"No photos here yet."}));
+  if(sb) box.append(h("label",{class:"btn btn-main upload"},"Add a photo",h("input",{type:"file",accept:"image/*",onchange:e=>uploadPhoto(s.id,e.target)})));
+}
+
+// ---- Writes ----
+async function setCurrent(i){
+  if(!sb) return;
+  const prev=current; current=Math.max(-1,Math.min(i,STOPS.length-1)); render();
+  const {error}=await sb.from("crawl_state").update({current,updated_at:new Date().toISOString()}).eq("id",1);
+  if(error){ current=prev; render(); toast("Couldn’t update where you are. Check your signal and try again."); }
+}
+$("advance").onclick=()=>setCurrent(current+1);
+$("undo").onclick=()=>setCurrent(current-1);
+
+async function bump(stopId,d){
+  if(!(await askName())) return;
+  if(!myCounts) myCounts={...(people.find(p=>p.id===myId)?.counts||{})};
+  myCounts[stopId]=Math.max(0,(+myCounts[stopId]||0)+d);
+  dirty=true; flushSoon(); render();
+}
+function flushSoon(){ clearTimeout(writeTimer); writeTimer=setTimeout(flush,600); }
+async function flush(){
+  writeTimer=null;
+  if(writing||!sb||!myName) return;
+  if(!dirty && people.some(p=>p.id===myId && p.nickname===myName)) return;
+  writing=true; dirty=false;
+  const counts=myCounts||people.find(p=>p.id===myId)?.counts||{};
+  const {error}=await sb.from("people").upsert({id:myId,nickname:myName,counts,updated_at:new Date().toISOString()});
+  writing=false;
+  if(error){ dirty=true; toast("Couldn’t save your drinks. It’ll retry on your next tap."); }
+  else if(dirty) flushSoon();
+}
+
+async function shrink(file){
+  try{
+    const bmp=await createImageBitmap(file,{imageOrientation:"from-image"});
+    const sc=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+    const c=document.createElement("canvas"); c.width=Math.round(bmp.width*sc); c.height=Math.round(bmp.height*sc);
+    c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
+    return await new Promise(r=>c.toBlob(r,"image/jpeg",0.82));
+  }catch{ return null; }
+}
+async function uploadPhoto(stopId,input){
+  const file=input.files&&input.files[0]; input.value="";
+  if(!file||!sb) return;
+  if(!(await askName())) return;
+  toast("Uploading photo…");
+  let blob=await shrink(file);
+  if(!blob){ if(["image/jpeg","image/png","image/webp","image/gif"].includes(file.type)) blob=file; else { toast("That photo format isn’t supported. Try a JPEG or PNG."); return; } }
+  const ext=blob.type==="image/png"?"png":blob.type==="image/webp"?"webp":blob.type==="image/gif"?"gif":"jpg";
+  const path=`${stopId}/${Date.now()}-${Math.random().toString(36).slice(2,8)}.${ext}`;
+  const up=await sb.storage.from("photos").upload(path,blob,{contentType:blob.type||"image/jpeg",upsert:false});
+  if(up.error){ toast("Couldn’t upload that photo. Try again."); return; }
+  const {error}=await sb.from("photos").insert({stop:stopId,path,person_id:myId,nickname:myName});
+  if(error){ toast("Photo uploaded but couldn’t be added to the stop. Try again."); return; }
+  toast("Photo added."); loadPhotos();
+}
+function openPhoto(p){
+  lbPhoto=p; $("lbImg").src=photoUrl(p);
+  $("lbBy").textContent = p.person_id===myId ? "You" : (p.nickname||"Someone");
+  $("lbDel").hidden = p.person_id!==myId;
+  $("lightbox").showModal();
+}
+$("lbClose").onclick=()=>$("lightbox").close();
+$("lightbox").addEventListener("click",e=>{ if(e.target===$("lightbox")) $("lightbox").close(); });
+$("lbDel").onclick=async()=>{
+  const p=lbPhoto; if(!p||!confirm("Remove this photo for everyone?")) return;
+  const {error}=await sb.from("photos").delete().eq("id",p.id);
+  if(error){ toast("Couldn’t remove that photo."); return; }
+  sb.storage.from("photos").remove([p.path]);
+  $("lightbox").close(); toast("Photo removed."); loadPhotos();
+};
+
+const slug=s=>s.toLowerCase().replace(/[’']/g,"").replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
+$("dlAll").onclick=async()=>{
+  if(zipping||!window.JSZip) return;
+  zipping=true; $("dlNote").textContent=""; renderPhotoBox();
+  try{
+    const zip=new JSZip(), per={}; let missing=0;
+    const list=[...photos].sort((a,b)=>STOPS.findIndex(s=>s.id===a.stop)-STOPS.findIndex(s=>s.id===b.stop)||String(a.created_at).localeCompare(String(b.created_at)));
+    for(const p of list){
+      const i=STOPS.findIndex(s=>s.id===p.stop); if(i<0) continue;
+      per[p.stop]=(per[p.stop]||0)+1;
+      try{
+        const r=await fetch(photoUrl(p)); if(!r.ok) throw 0;
+        const ext=p.path.split(".").pop();
+        zip.file(`${String(i+1).padStart(2,"0")}-${slug(STOPS[i].name)}-${String(per[p.stop]).padStart(2,"0")}.${ext}`, await r.blob());
+      }catch{ missing++; }
+    }
+    const out=await zip.generateAsync({type:"blob",compression:"STORE"});
+    const a=h("a",{href:URL.createObjectURL(out),download:"beer-mile-photos.zip"}); document.body.append(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),60000);
+    if(missing) $("dlNote").textContent=`${missing} photo${missing===1?" was":"s were"} missing and left out.`;
+  }catch{ $("dlNote").textContent="Couldn’t build the download. Try again, ideally from a computer."; }
+  zipping=false; renderPhotoBox();
+};
+
+// ---- Reads + live updates ----
+async function loadState(){ const {data,error}=await sb.from("crawl_state").select("current").eq("id",1).maybeSingle(); if(!error&&data){ current=data.current; render(); } return !error; }
+async function loadPeople(){
+  const {data,error}=await sb.from("people").select("id,nickname,counts");
+  if(!error){ people=data||[]; if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
+}
+async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=data||[]; render(); } }
+async function loadAll(){
+  const ok=await loadState(); await Promise.all([loadPeople(),loadPhotos()]);
+  $("note").textContent = ok ? "" : "Can’t reach the shared route right now. What you see may be out of date.";
+}
+
+render(); renderMe();
+if(!configured){ $("note").textContent="This page isn’t connected to its database yet. Add the Supabase URL and key at the top of the file."; }
+else if(!sb){ $("note").textContent="Couldn’t load the page’s database library. Check your connection and reload."; }
+else {
+  loadAll();
+  sb.channel("crawl")
+    .on("postgres_changes",{event:"*",schema:"public",table:"crawl_state"},p=>{ if(p.new&&Number.isInteger(p.new.current)){ current=p.new.current; render(); } })
+    .on("postgres_changes",{event:"*",schema:"public",table:"people"},()=>loadPeople())
+    .on("postgres_changes",{event:"*",schema:"public",table:"photos"},()=>loadPhotos())
+    .subscribe();
+  // Phones drop live connections when the screen locks, so refresh on return and every 20s as a backstop.
+  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) loadAll(); });
+  setInterval(()=>{ if(!document.hidden) loadAll(); },20000);
+  if(myName) flushSoon();
+}
+</script>
+</body>
+</html>
