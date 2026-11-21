@@ -7,11 +7,12 @@
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍺</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Shrikhand&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#EEF1EB; --surface:#FFFFFF; --ink:#1C2B25; --muted:#5B6B64; --line:#C9D1CB;
-  --beer:#E3A21A; --beer-ink:#8A5A00; --foam:#FFF6DD; --arch:#D8DED9;
+  --bg:#FBF3E2; --surface:#FFFFFF; --ink:#2B1A0E; --muted:#735740; --line:#E6D3B3;
+  --beer:#E89A12; --beer-ink:#955400; --foam:#FFF1CC; --arch:#EBDCC0;
+  --head:#FFF8E6; --hop:#4E7A2B; --sign:"Shrikhand", "Bricolage Grotesque", Georgia, serif;
   --display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
   --body:"Atkinson Hyperlegible", "Segoe UI", system-ui, -apple-system, sans-serif;
   color-scheme: light;
@@ -21,8 +22,8 @@
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --bg:#18221E; --surface:#212D28; --ink:#ECEFE7; --muted:#9FAEA6; --line:#34433C;
-    --beer:#F2B632; --beer-ink:#F2B632; --foam:#2E3A2A; --arch:#26332D;
+    --bg:#1C130B; --surface:#2A1D12; --ink:#F7EBD6; --muted:#C7AD8C; --line:#47331F;
+    --beer:#F4B43A; --beer-ink:#F4B43A; --foam:#3B2A17; --arch:#33241A;
     color-scheme: dark;
   }
 }
@@ -34,16 +35,31 @@ button,input{font:inherit;color:inherit}
 a{color:var(--beer-ink)}
 :focus-visible{outline:3px solid var(--beer);outline-offset:2px}
 .wrap{max-width:560px;margin:0 auto;padding:0 18px}
-header.top{padding:22px 0 6px}
-h1{font-family:var(--display);font-weight:800;font-size:clamp(2rem,9vw,2.8rem);line-height:1;letter-spacing:-.02em;margin:0}
-.sub{color:var(--muted);margin:.4rem 0 0}
+.bunting{height:30px;margin:0 -18px;background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='30'%3E%3Cpath d='M0 3Q60 9 120 3' stroke='%23A07A55' fill='none' stroke-width='1.5'/%3E%3Cpath d='M6 4.5h28L20 27z' fill='%23E89A12'/%3E%3Cpath d='M46 6h28L60 28z' fill='%234E7A2B'/%3E%3Cpath d='M86 4.5h28L100 27z' fill='%23C8412B'/%3E%3C/svg%3E") 0 0/120px 30px repeat-x}
+header.top{position:relative;overflow:hidden;margin:6px 0 4px;padding:46px 20px 22px;border-radius:22px;color:#2B1700;
+  background:linear-gradient(180deg,#F7C548 0%,#EDA422 55%,#D9861A 100%);box-shadow:0 6px 20px -10px #8A4F0080}
+header.top::before{content:"";position:absolute;left:0;right:0;top:0;height:40px;pointer-events:none;
+  background:radial-gradient(circle at 14px 0,var(--head) 15px,transparent 15.5px) 0 18px/28px 28px repeat-x,
+    radial-gradient(circle at 10px 0,var(--head) 10px,transparent 10.5px) 9px 20px/22px 22px repeat-x,
+    linear-gradient(var(--head),var(--head)) 0 0/100% 19px no-repeat}
+@media (prefers-color-scheme: dark){ :root{--head:#FFF1D2} }
+header.top>*:not(.bubbles){position:relative}
+.bubbles i{position:absolute;bottom:var(--y);left:var(--x);width:var(--s);height:var(--s);border-radius:50%;background:#FFFFFF8C;box-shadow:inset -1px -1px 0 #FFFFFF60}
+@media (prefers-reduced-motion:no-preference){
+  .bubbles i{bottom:-10px;animation:rise var(--t) linear var(--d) infinite}
+  @keyframes rise{80%{opacity:.9}to{transform:translateY(-200px);opacity:0}}
+}
+.kicker{margin:0 0 .3rem;font-weight:700;font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;color:#5A3300}
+h1{font-family:var(--sign);font-weight:400;font-size:clamp(2.1rem,10vw,3rem);line-height:1.05;margin:0;text-shadow:0 2px 0 #FFF1C9}
+.sub{color:#4A2A00;margin:.5rem 0 0}
 .status{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding:12px 0 14px;border-bottom:1px solid var(--line)}
 .now{font-family:var(--display);font-weight:700;font-size:1.35rem;line-height:1.2;margin:0}
 .next{margin:.15rem 0 .7rem;color:var(--muted)}
 .next strong{color:var(--ink)}
 .actions{display:flex;gap:8px}
 .btn{border:0;border-radius:999px;padding:.7rem 1.1rem;cursor:pointer;font-weight:700;min-height:44px}
-.btn-main{flex:1;background:var(--beer);color:#231700}
+.btn-main{flex:1;background:linear-gradient(#F7C548,#E89A12);color:#231700;box-shadow:0 3px 0 #B06A00}
+.btn-main:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #B06A00}
 .btn-quiet{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
 .btn:disabled{opacity:.45;cursor:default}
 .note{font-size:.9rem;color:var(--muted);margin:.5rem 0 0}
@@ -59,8 +75,8 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(2rem,9vw,2.8rem);l
 .stop.current .track{background:linear-gradient(var(--beer) 0 22px, transparent 22px), repeating-linear-gradient(var(--muted) 0 6px,transparent 6px 12px);opacity:1}
 .pin{position:relative;z-index:1;margin:6px 0 0 6px;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;
   font-family:var(--display);font-weight:800;font-size:.9rem;background:var(--surface);border:2.5px solid var(--muted);color:var(--ink)}
-.done .pin{background:var(--beer);border-color:var(--beer);color:#231700}
-.current .pin{background:var(--beer);border-color:var(--ink);color:#231700;transform:scale(1.18);box-shadow:0 0 0 5px color-mix(in srgb,var(--beer) 35%,transparent)}
+.done .pin{background:linear-gradient(var(--head) 0 30%,var(--beer) 30%);border-color:var(--beer);color:#231700}
+.current .pin{background:linear-gradient(var(--head) 0 30%,var(--beer) 30%);border-color:var(--ink);color:#231700;transform:scale(1.18);box-shadow:0 0 0 5px color-mix(in srgb,var(--beer) 35%,transparent)}
 .upcoming .pin{border-color:var(--beer);border-width:3px}
 @media (prefers-reduced-motion:no-preference){
   .current .pin{animation:pulse 2.2s ease-in-out infinite}
@@ -76,7 +92,10 @@ h1{font-family:var(--display);font-weight:800;font-size:clamp(2rem,9vw,2.8rem);l
 .walk{font-size:.8rem;color:var(--muted);padding:0 12px 6px;display:block}
 .tag{font-size:.78rem;font-weight:700;color:var(--beer-ink)}
 section.board{margin:26px 0 30px}
-h2{font-family:var(--display);font-weight:700;font-size:1.4rem;margin:0 0 .6rem}
+h2{font-family:var(--sign);font-weight:400;font-size:1.6rem;margin:0 0 .6rem;color:var(--beer-ink)}
+.people li:first-child .c{color:var(--beer-ink)}
+.fizz{position:fixed;z-index:60;pointer-events:none;font-size:1.6rem;line-height:1;transform:translate(-50%,-50%);animation:fizz 1.1s ease-out forwards}
+@keyframes fizz{to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--r)) scale(1.2);opacity:0}}
 .people{list-style:none;padding:0;margin:0}
 .people li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
 .people .n{flex:1}
@@ -86,7 +105,7 @@ dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:560px;ma
 dialog.sheet::backdrop,dialog.ask::backdrop{background:rgba(0,0,0,.45)}
 .sheet-in{padding:16px 18px calc(22px + env(safe-area-inset-bottom,0px));overflow:auto;max-height:inherit}
 .sheet-head{display:flex;align-items:flex-start;gap:10px}
-.sheet-head h3{font-family:var(--display);font-weight:800;font-size:1.6rem;line-height:1.1;margin:0;flex:1}
+.sheet-head h3{font-family:var(--sign);font-weight:400;font-size:1.6rem;line-height:1.1;margin:0;flex:1}
 .x{border:0;background:var(--bg);border-radius:50%;width:40px;height:40px;cursor:pointer;font-size:1.2rem}
 .row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:.8rem 0}
 .counter{display:flex;align-items:center;gap:6px;background:var(--foam);border-radius:999px;padding:4px}
@@ -112,7 +131,10 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
 </head>
 <body>
 <div class="wrap">
+  <div class="bunting" aria-hidden="true"></div>
   <header class="top">
+    <div class="bubbles" aria-hidden="true"><i style="--x:6%;--y:20%;--s:6px;--d:0s;--t:5.5s"></i><i style="--x:14%;--y:55%;--s:4px;--d:1.8s;--t:4.2s"></i><i style="--x:27%;--y:35%;--s:7px;--d:3.1s;--t:6.4s"></i><i style="--x:41%;--y:12%;--s:5px;--d:0.7s;--t:5s"></i><i style="--x:55%;--y:62%;--s:4px;--d:2.4s;--t:4.6s"></i><i style="--x:68%;--y:28%;--s:8px;--d:1.2s;--t:7s"></i><i style="--x:79%;--y:48%;--s:5px;--d:3.6s;--t:5.2s"></i><i style="--x:88%;--y:18%;--s:6px;--d:0.3s;--t:6s"></i><i style="--x:94%;--y:70%;--s:4px;--d:2.9s;--t:4.4s"></i></div>
+    <p class="kicker">Bermondsey pub crawl · Cheers!</p>
     <h1>Beer Mile, backwards</h1>
     <p class="sub">From The Kernel to Maltby Street, under the Bermondsey arches. Tap any stop to count drinks and add photos.</p>
   </header>
@@ -127,12 +149,12 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
   </div>
   <ol class="route" id="route" aria-label="Crawl route"></ol>
   <section class="board">
-    <h2>Drinks so far</h2>
+    <h2>Drinks so far 🍻</h2>
     <p class="empty" id="boardTotal"></p>
     <ul class="people" id="people"></ul>
   </section>
   <section class="board">
-    <h2>Photos</h2>
+    <h2>Photos 📸</h2>
     <p class="empty" id="photoCount">No photos yet.</p>
     <button class="btn btn-main" id="dlAll" hidden>Download all photos</button>
     <p class="note" id="dlNote"></p>
@@ -196,6 +218,17 @@ function h(tag, attrs={}, ...kids){
   }
   for(const k of kids.flat()){ if(k==null||k===false) continue; el.append(k.nodeType?k:document.createTextNode(k)); }
   return el;
+}
+const CHEERS=["Cheers! 🍻","Get it down you! 🍺","Lovely stuff. 🍺","Another one! 🍻","Sláinte! 🍻","Prost! 🍺","Santé! 🍻"];
+const pick=a=>a[Math.floor(Math.random()*a.length)];
+function cheers(rect,n=10){
+  if(!rect||matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const host=document.querySelector("dialog[open]")||document.body, x=rect.left+rect.width/2, y=rect.top+rect.height/2;
+  for(let k=0;k<n;k++){
+    const e=h("span",{class:"fizz","aria-hidden":"true",text:["🍺","🫧","🍻","✨"][k%4]});
+    e.style.cssText=`left:${x}px;top:${y}px;--dx:${Math.random()*180-90}px;--dy:${-50-Math.random()*130}px;--r:${Math.random()*90-45}deg`;
+    host.append(e); setTimeout(()=>e.remove(),1200);
+  }
 }
 let toastT;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3500); }
@@ -269,7 +302,7 @@ function renderBoard(){
   const grand=rows.reduce((a,r)=>a+r.n,0);
   $("boardTotal").textContent = grand ? `${grand} drink${grand===1?"":"s"} between you.` : "No drinks logged yet. Open a stop and tap + after each one.";
   const ul=$("people"); ul.textContent="";
-  for(const r of rows) ul.append(h("li",{},h("span",{class:"n",text:(r.name||"Someone")+(r.id===myId?" (you)":"")}),h("span",{class:"c",text:String(r.n)})));
+  rows.forEach((r,k)=>ul.append(h("li",{},h("span",{class:"n",text:(k===0&&rows.length>1?"👑 ":"")+(r.name||"Someone")+(r.id===myId?" (you)":"")}),h("span",{class:"c",text:r.n+" 🍺"}))));
 }
 function renderPhotoBox(){
   const n=photos.length, stops=new Set(photos.map(p=>p.stop)).size;
@@ -296,7 +329,7 @@ function renderSheet(){
       h("div",{class:"counter"},
         h("button",{"aria-label":"One fewer",onclick:()=>bump(s.id,-1),disabled:mine<=0||!sb,text:"−"}),
         h("output",{"aria-live":"polite",text:String(mine)}),
-        h("button",{"aria-label":"One more",onclick:()=>bump(s.id,1),disabled:!sb,text:"+"})),
+        h("button",{"aria-label":"One more",onclick:async e=>{const r=e.currentTarget.getBoundingClientRect(); if(await bump(s.id,1)){ cheers(r); toast(`${pick(CHEERS)} That’s ${mine+1} here.`); }},disabled:!sb,text:"+"})),
       h("span",{class:"note",text:`Yours. Group total here: ${group}.`})));
   box.append(h("h4",{text:`Photos${list.length?` (${list.length})`:""}`}));
   if(list.length){
@@ -312,16 +345,21 @@ async function setCurrent(i){
   if(!sb) return;
   const prev=current; current=Math.max(-1,Math.min(i,STOPS.length-1)); render();
   const {error}=await sb.from("crawl_state").update({current,updated_at:new Date().toISOString()}).eq("id",1);
-  if(error){ current=prev; render(); toast("Couldn’t update where you are. Check your signal and try again."); }
+  if(error){ current=prev; render(); toast("Couldn’t update where you are. Check your signal and try again."); return; }
+  if(current>prev){
+    const done=current===STOPS.length-1;
+    toast(done?"Crawl complete. Absolute legends. 🏆🍻":`Cheers! Welcome to ${STOPS[current].name} 🍻`);
+    cheers(($("sheet").open?$("sheetIn"):$("advance")).getBoundingClientRect(), done?28:12);
+  }
 }
 $("advance").onclick=()=>setCurrent(current+1);
 $("undo").onclick=()=>setCurrent(current-1);
 
 async function bump(stopId,d){
-  if(!(await askName())) return;
+  if(!(await askName())) return false;
   if(!myCounts) myCounts={...(people.find(p=>p.id===myId)?.counts||{})};
   myCounts[stopId]=Math.max(0,(+myCounts[stopId]||0)+d);
-  dirty=true; flushSoon(); render();
+  dirty=true; flushSoon(); render(); return true;
 }
 function flushSoon(){ clearTimeout(writeTimer); writeTimer=setTimeout(flush,600); }
 async function flush(){
