@@ -99,12 +99,23 @@ h1{font-family:var(--sign);font-weight:400;font-size:clamp(2.1rem,10vw,3rem);lin
 section.board{margin:26px 0 30px}
 h2{font-family:var(--sign);font-weight:400;font-size:1.6rem;margin:0 0 .6rem;color:var(--beer-ink)}
 .people li:first-child .c{color:var(--beer-ink)}
+.avatar{all:unset;flex:none;width:44px;height:44px;border-radius:50%;overflow:hidden;display:grid;place-items:center;background:var(--foam);border:2.5px solid var(--beer);font-family:var(--display);font-weight:800;font-size:1.1rem;color:var(--beer-ink);box-sizing:border-box}
+button.avatar{cursor:pointer}
+.avatar img{width:100%;height:100%;object-fit:cover;display:block}
+.avatar.sm{width:30px;height:30px;font-size:.85rem;border-width:2px;display:inline-grid;vertical-align:middle;margin-right:6px}
+.avatar.big{width:84px;height:84px;font-size:2rem}
+.rank{width:2.2ch;text-align:center;font-family:var(--display);font-weight:800;color:var(--muted)}
+.people .sub{display:block;font-size:.85rem;font-weight:400;color:var(--muted)}
+.selfie-pick{display:flex;align-items:center;gap:14px;cursor:pointer;margin:.2rem 0 1rem}
+.selfie-pick input{position:absolute;width:1px;height:1px;opacity:0}
+.selfie-pick .btn{flex:none}
 .fizz{position:fixed;z-index:60;pointer-events:none;font-size:1.6rem;line-height:1;transform:translate(-50%,-50%);animation:fizz 1.1s ease-out forwards}
 @keyframes fizz{to{transform:translate(calc(-50% + var(--dx)),calc(-50% + var(--dy))) rotate(var(--r)) scale(1.2);opacity:0}}
 .people{list-style:none;padding:0;margin:0}
 .people li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--line)}
-.people .n{flex:1}
-.people .c{font-family:var(--display);font-weight:800;font-size:1.2rem}
+.people .n{flex:1;min-width:0;font-weight:700}
+.people .c{font-family:var(--display);font-weight:800;font-size:1.3rem;text-align:right;line-height:1.1}
+.people .c small{display:block;font-family:var(--body);font-weight:400;font-size:.75rem;color:var(--muted)}
 .empty{color:var(--muted)}
 dialog.sheet{border:0;padding:0;margin:auto auto 0;width:100%;max-width:560px;max-height:88vh;max-height:88dvh;border-radius:20px 20px 0 0;background:var(--surface);color:var(--ink)}
 dialog.sheet::backdrop,dialog.ask::backdrop{background:rgba(0,0,0,.45)}
@@ -154,16 +165,16 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
   </div>
   <ol class="route" id="route" aria-label="Crawl route"></ol>
   <section class="board">
-    <h2>Drinks so far 🍻</h2>
+    <h2>Leaderboard 🏆</h2>
     <p class="empty" id="boardTotal"></p>
-    <ul class="people" id="people"></ul>
+    <ol class="people" id="people"></ol>
+    <p class="note" id="meLine"></p>
   </section>
   <section class="board">
     <h2>Photos 📸</h2>
     <p class="empty" id="photoCount">No photos yet.</p>
     <button class="btn btn-main" id="dlAll" hidden>Download all photos</button>
     <p class="note" id="dlNote"></p>
-    <p class="note" id="meLine"></p>
   </section>
 </div>
 
@@ -174,9 +185,10 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
 </dialog>
 <dialog class="ask" id="ask">
   <form method="dialog" id="askForm">
-    <h3>What should we call you?</h3>
-    <p class="note">Shown next to your drinks and photos. No sign-up needed.</p>
+    <h3>Join the crawl</h3>
+    <p class="note">Your name and selfie go on the leaderboard. No sign-up needed.</p>
     <input id="askName" maxlength="24" autocomplete="nickname" required placeholder="Your name">
+    <label class="selfie-pick"><span class="avatar big" id="askPrev">📸</span><span class="btn btn-quiet" id="askSelfieLabel">Take a selfie</span><input type="file" id="askSelfie" accept="image/*" capture="user"></label>
     <div class="actions"><button class="btn btn-quiet" value="cancel" formnovalidate>Cancel</button><button class="btn btn-main" value="ok">Save</button></div>
   </form>
 </dialog>
@@ -243,21 +255,53 @@ function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clea
 // ---- Local identity (no login) ----
 const store={get(k){try{return localStorage.getItem(k)}catch{return null}},set(k,v){try{localStorage.setItem(k,v)}catch{}}};
 let myId=store.get("bm_id"); if(!myId){ myId=(crypto.randomUUID?crypto.randomUUID():String(Math.random()).slice(2)+Date.now()); store.set("bm_id",myId); }
-let myName=store.get("bm_name")||"";
-function askName(){
+let myName=store.get("bm_name")||"", mySelfie=store.get("bm_selfie")||null, pendingSelfie=null, selfieColMissing=false;
+const selfieUrl = path => path&&sb ? sb.storage.from("photos").getPublicUrl(path).data.publicUrl : null;
+function avatar(name,path,cls=""){
+  const url=selfieUrl(path), label=(name||"?").trim().charAt(0).toUpperCase()||"?";
+  if(!url) return h("span",{class:"avatar "+cls,"aria-hidden":"true",text:label});
+  return h("button",{class:"avatar "+cls,"aria-label":"Open "+(name||"their")+"’s selfie",onclick:()=>openPhoto({path,nickname:name,person_id:null})},h("img",{src:url,alt:"",loading:"lazy"}));
+}
+function setPrev(src){
+  const pv=$("askPrev"); pv.textContent="";
+  if(src) pv.append(h("img",{src,alt:"Your selfie"})); else pv.textContent="📸";
+  $("askSelfieLabel").textContent = src ? "Retake selfie" : "Take a selfie";
+}
+$("askSelfie").onchange=async e=>{
+  const f=e.target.files&&e.target.files[0]; e.target.value=""; if(!f) return;
+  const b=await shrink(f,480);
+  if(!b){ toast("That photo format isn’t supported. Try a JPEG or PNG."); return; }
+  pendingSelfie=b; setPrev(URL.createObjectURL(b));
+};
+function askName(edit=false){
   return new Promise(res=>{
-    if(myName) return res(true);
-    const d=$("ask"); $("askName").value="";
+    if(myName && !edit) return res(true);
+    const d=$("ask"); $("askName").value=myName; pendingSelfie=null; setPrev(selfieUrl(mySelfie));
     d.onclose=()=>{
       const v=$("askName").value.trim();
-      if(d.returnValue==="ok" && v){ myName=v; store.set("bm_name",v); renderMe(); flushSoon(); res(true); } else res(false);
+      if(d.returnValue==="ok" && v){
+        myName=v; store.set("bm_name",v); dirty=true;
+        if(pendingSelfie) saveSelfie(pendingSelfie);
+        renderMe(); render(); flushSoon(); res(true);
+      } else res(false);
+      pendingSelfie=null;
     };
     d.showModal();
   });
 }
+async function saveSelfie(blob){
+  if(!sb) return;
+  toast("Uploading your selfie…");
+  const path=`selfies/${myId}-${Date.now()}.jpg`;
+  const up=await sb.storage.from("photos").upload(path,blob,{contentType:"image/jpeg",upsert:false});
+  if(up.error){ toast("Couldn’t upload your selfie. Try again from Edit profile."); return; }
+  mySelfie=path; store.set("bm_selfie",path); dirty=true; flushSoon(); renderMe(); render();
+  toast("Looking good. 📸");
+}
 function renderMe(){
   const m=$("meLine"); m.textContent="";
-  if(myName) m.append(`You’re “${myName}” on this phone. `, h("a",{href:"#",onclick:e=>{e.preventDefault(); myName=""; askName();},text:"Change name"}));
+  if(myName) m.append(avatar(myName,mySelfie,"sm"), `You’re “${myName}” on this phone. `, h("a",{href:"#",onclick:e=>{e.preventDefault(); askName(true);},text:"Edit name or selfie"}));
+  else if(sb) m.append(h("button",{class:"btn btn-main",onclick:()=>askName(),text:"Join the leaderboard 📸"}));
 }
 
 // ---- State ----
@@ -268,7 +312,7 @@ let myCounts=null, dirty=false, writing=false, writeTimer=null;
 let openStop=null, lbPhoto=null, zipping=false;
 
 const countsFor = p => (p.id===myId && myCounts) ? myCounts : (p.counts||{});
-function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
+function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||myName||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,selfie:mySelfie||people.find(p=>p.id===myId)?.selfie,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
 const stopTotal = id => allPeople().reduce((n,p)=>n+(+countsFor(p)[id]||0),0);
 const photosFor = id => photos.filter(p=>p.stop===id);
 const photoUrl = p => sb.storage.from("photos").getPublicUrl(p.path).data.publicUrl;
@@ -306,11 +350,25 @@ function renderRoute(){
   });
 }
 function renderBoard(){
-  const rows=allPeople().map(p=>({id:p.id,name:p.id===myId?myName:p.nickname,n:Object.values(countsFor(p)).reduce((a,b)=>a+(+b||0),0)})).filter(r=>r.n>0).sort((a,b)=>b.n-a.n);
+  const rows=allPeople().map(p=>{
+    const c=countsFor(p);
+    return {id:p.id,name:p.id===myId?myName:p.nickname,selfie:p.selfie,
+      stops:STOPS.filter(s=>(+c[s.id]||0)>0).length,
+      n:STOPS.reduce((a,s)=>a+(+c[s.id]||0),0)};
+  }).filter(r=>r.stops>0||r.name).sort((a,b)=>b.stops-a.stops||b.n-a.n);
   const grand=rows.reduce((a,r)=>a+r.n,0);
-  $("boardTotal").textContent = grand ? `${grand} drink${grand===1?"":"s"} between you.` : "No drinks logged yet. Open a stop and tap + after each one.";
+  $("boardTotal").textContent = grand ? `Ranked by stops with a drink logged. ${grand} drink${grand===1?"":"s"} between you so far.` : "No drinks logged yet. Open a stop and tap + after each one.";
   const ul=$("people"); ul.textContent="";
-  rows.forEach((r,k)=>ul.append(h("li",{},h("span",{class:"n",text:(k===0&&rows.length>1?"👑 ":"")+(r.name||"Someone")+(r.id===myId?" (you)":"")}),h("span",{class:"c",text:r.n+" 🍺"}))));
+  rows.forEach((r,k)=>{
+    const same=k>0&&rows[k-1].stops===r.stops&&rows[k-1].n===r.n;
+    const pos=rows.findIndex(x=>x.stops===r.stops&&x.n===r.n);
+    const medal=r.stops?["🥇","🥈","🥉"][pos]:null;
+    ul.append(h("li",{},
+      h("span",{class:"rank","aria-label":`Position ${pos+1}${same?" (tied)":""}`,text:medal||String(pos+1)}),
+      avatar(r.name,r.selfie),
+      h("span",{class:"n"},(r.name||"Someone")+(r.id===myId?" (you)":""),h("span",{class:"sub",text:`${r.n} drink${r.n===1?"":"s"}`})),
+      h("span",{class:"c"},`${r.stops}/${STOPS.length}`,h("small",{text:"stops"}))));
+  });
 }
 function renderPhotoBox(){
   const n=photos.length, stops=new Set(photos.map(p=>p.stop)).size;
@@ -392,19 +450,26 @@ function flushSoon(){ clearTimeout(writeTimer); writeTimer=setTimeout(flush,600)
 async function flush(){
   writeTimer=null;
   if(writing||!sb||!myName) return;
-  if(!dirty && people.some(p=>p.id===myId && p.nickname===myName)) return;
+  if(!dirty && people.some(p=>p.id===myId && p.nickname===myName && (selfieColMissing||!mySelfie||p.selfie===mySelfie))) return;
   writing=true; dirty=false;
   const counts=myCounts||people.find(p=>p.id===myId)?.counts||{};
-  const {error}=await sb.from("people").upsert({id:myId,nickname:myName,counts,updated_at:new Date().toISOString()});
+  const row={id:myId,nickname:myName,counts,updated_at:new Date().toISOString()};
+  if(mySelfie && !selfieColMissing) row.selfie=mySelfie;
+  let {error}=await sb.from("people").upsert(row);
+  if(error && row.selfie && /selfie/i.test(error.message||"")){
+    selfieColMissing=true; delete row.selfie;
+    ({error}=await sb.from("people").upsert(row));
+    toast("Selfie uploaded, but the database needs its “selfie” column before others can see it.");
+  }
   writing=false;
   if(error){ dirty=true; toast("Couldn’t save your drinks. It’ll retry on your next tap."); }
   else if(dirty) flushSoon();
 }
 
-async function shrink(file){
+async function shrink(file,max=1600){
   try{
     const bmp=await createImageBitmap(file,{imageOrientation:"from-image"});
-    const sc=Math.min(1,1600/Math.max(bmp.width,bmp.height));
+    const sc=Math.min(1,max/Math.max(bmp.width,bmp.height));
     const c=document.createElement("canvas"); c.width=Math.round(bmp.width*sc); c.height=Math.round(bmp.height*sc);
     c.getContext("2d").drawImage(bmp,0,0,c.width,c.height);
     return await new Promise(r=>c.toBlob(r,"image/jpeg",0.82));
@@ -460,8 +525,8 @@ $("dlAll").onclick=async()=>{
 // ---- Reads + live updates ----
 async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
 async function loadPeople(){
-  const {data,error}=await sb.from("people").select("id,nickname,counts");
-  if(!error){ people=data||[]; if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
+  const {data,error}=await sb.from("people").select("*");
+  if(!error){ people=data||[]; const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); } if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
 }
 async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
 async function loadAll(){
