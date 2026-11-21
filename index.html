@@ -136,7 +136,7 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
     <div class="bubbles" aria-hidden="true"><i style="--x:6%;--y:20%;--s:6px;--d:0s;--t:5.5s"></i><i style="--x:14%;--y:55%;--s:4px;--d:1.8s;--t:4.2s"></i><i style="--x:27%;--y:35%;--s:7px;--d:3.1s;--t:6.4s"></i><i style="--x:41%;--y:12%;--s:5px;--d:0.7s;--t:5s"></i><i style="--x:55%;--y:62%;--s:4px;--d:2.4s;--t:4.6s"></i><i style="--x:68%;--y:28%;--s:8px;--d:1.2s;--t:7s"></i><i style="--x:79%;--y:48%;--s:5px;--d:3.6s;--t:5.2s"></i><i style="--x:88%;--y:18%;--s:6px;--d:0.3s;--t:6s"></i><i style="--x:94%;--y:70%;--s:4px;--d:2.9s;--t:4.4s"></i></div>
     <p class="kicker">Bermondsey pub crawl · Cheers!</p>
     <h1>The Beer Mile</h1>
-    <p class="sub">From The Kernel to Maltby Street, under the Bermondsey arches. Tap any stop to count drinks and add photos.</p>
+    <p class="sub">From The Kernel to Southwark Brewing, under the Bermondsey arches. Tap any stop to count drinks and add photos.</p>
   </header>
   <div class="status">
     <p class="now" id="now">Not started yet</p>
@@ -203,7 +203,6 @@ const STOPS = [
   {id:"doodle",   name:"The Doodle Bar",                    addr:"60 Druid Street",     walk:70, approx:true, extra:"Chalkboard walls: leave your mark."},
   {id:"kanpai",   name:"Kanpai Taproom & Kitchen",          addr:"48 Druid Street",     walk:3,   brews:true},
   {id:"southwark",name:"Southwark Brewing",                 addr:"46 Druid Street",     walk:170, brews:true},
-  {id:"maltby",   name:"Maltby Street Market",              addr:"Ropewalk",            extra:"The finish: food stalls and a couple of bars."},
 ];
 const MAPS = s => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(s.name + ", " + s.addr + ", Bermondsey, London");
 
@@ -431,12 +430,12 @@ $("dlAll").onclick=async()=>{
 };
 
 // ---- Reads + live updates ----
-async function loadState(){ const {data,error}=await sb.from("crawl_state").select("current").eq("id",1).maybeSingle(); if(!error&&data){ current=data.current; render(); } return !error; }
+async function loadState(){ const {data,error}=await sb.from("crawl_state").select("current").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); render(); } return !error; }
 async function loadPeople(){
   const {data,error}=await sb.from("people").select("id,nickname,counts");
   if(!error){ people=data||[]; if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
 }
-async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=data||[]; render(); } }
+async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
 async function loadAll(){
   const ok=await loadState(); await Promise.all([loadPeople(),loadPhotos()]);
   $("note").textContent = ok ? "" : "Can’t reach the shared route right now. What you see may be out of date.";
@@ -448,7 +447,7 @@ else if(!sb){ $("note").textContent="Couldn’t load the page’s database libra
 else {
   loadAll();
   sb.channel("crawl")
-    .on("postgres_changes",{event:"*",schema:"public",table:"crawl_state"},p=>{ if(p.new&&Number.isInteger(p.new.current)){ current=p.new.current; render(); } })
+    .on("postgres_changes",{event:"*",schema:"public",table:"crawl_state"},p=>{ if(p.new&&Number.isInteger(p.new.current)){ current=Math.min(p.new.current,STOPS.length-1); render(); } })
     .on("postgres_changes",{event:"*",schema:"public",table:"people"},()=>loadPeople())
     .on("postgres_changes",{event:"*",schema:"public",table:"photos"},()=>loadPhotos())
     .subscribe();
