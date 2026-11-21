@@ -61,6 +61,7 @@ h1{font-family:var(--sign);font-weight:400;font-size:clamp(2.1rem,10vw,3rem);lin
 .btn-main{flex:1;background:linear-gradient(#F7C548,#E89A12);color:#231700;box-shadow:0 3px 0 #B06A00}
 .btn-main:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #B06A00}
 .btn-quiet{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
+.btn-danger{flex:1;background:#B3361F;color:#fff}
 .btn:disabled{opacity:.45;cursor:default}
 .note{font-size:.9rem;color:var(--muted);margin:.5rem 0 0}
 .note:empty{display:none}
@@ -194,6 +195,14 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
 <dialog class="lightbox" id="lightbox">
   <div class="lb-bar"><span id="lbBy"></span><button class="btn btn-quiet" id="lbClose">Close</button></div>
   <img id="lbImg" alt="">
+</dialog>
+<dialog class="ask" id="reset" aria-labelledby="resetTitle">
+  <form method="dialog" id="resetForm">
+    <h3 id="resetTitle">Reset the crawl</h3>
+    <p class="note">Deletes everyone’s names, drinks and photos, and puts the route back to the start. This can’t be undone.</p>
+    <input id="resetPw" type="password" autocomplete="current-password" required placeholder="Password">
+    <div class="actions"><button class="btn btn-quiet" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn btn-danger" id="resetGo" value="ok">Reset everything</button></div>
+  </form>
 </dialog>
 <dialog class="ask" id="ask">
   <form method="dialog" id="askForm">
@@ -553,7 +562,32 @@ async function loadAll(){
   $("note").textContent = ok ? "" : "Can’t reach the shared route right now. What you see may be out of date.";
 }
 
-render(); renderMe();
+// ---- Reset (open the page with #reset). The password is checked inside the database, never in this file. ----
+function maybeReset(){
+  if(location.hash!=="#reset") return;
+  if(!sb){ toast("This page isn’t connected to its database."); return; }
+  $("resetPw").value=""; $("resetGo").disabled=false; $("reset").showModal();
+}
+$("reset").addEventListener("close",()=>{ if(location.hash==="#reset") history.replaceState(null,"",location.pathname+location.search); });
+$("resetForm").addEventListener("submit",async e=>{
+  if(e.submitter?.value!=="ok") return;
+  e.preventDefault();
+  const pw=$("resetPw").value; if(!pw) return;
+  $("resetGo").disabled=true; $("resetGo").textContent="Resetting…";
+  const {error}=await sb.rpc("reset_crawl",{pw});
+  $("resetGo").disabled=false; $("resetGo").textContent="Reset everything";
+  if(error){
+    const msg=String(error.message||"");
+    toast(/wrong password/i.test(msg) ? "Wrong password." : /reset_crawl|function/i.test(msg) ? "Reset isn’t set up in the database yet." : "Couldn’t reset. Check your signal and try again.");
+    return;
+  }
+  $("reset").close();
+  current=-1; closed=[]; people=[]; photos=[]; myCounts=null; dirty=false;
+  render(); toast("Crawl reset. Fresh start! 🍺");
+});
+window.addEventListener("hashchange",maybeReset);
+
+render(); renderMe(); maybeReset();
 if(!configured){ $("note").textContent="This page isn’t connected to its database yet. Add the Supabase URL and key at the top of the file."; }
 else if(!sb){ $("note").textContent="Couldn’t load the page’s database library. Check your connection and reload."; }
 else {
