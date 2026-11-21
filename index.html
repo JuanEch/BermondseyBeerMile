@@ -588,8 +588,9 @@ async function adminDirect(action,target,value){
     return {ok:true};
   }
   if(action==="delete_person"){
-    const d=rows(await sb.from("people").delete().eq("id",target).select("id"));
-    if(!d.length){
+    // A real delete may be refused outright or silently remove nothing; either way, hide them instead.
+    const del=await sb.from("people").delete().eq("id",target).select("id");
+    if(del.error||!(del.data||[]).length){
       const u=rows(await sb.from("people").update({counts:{_deleted:true}}).eq("id",target).select("id"));
       if(!u.length) throw new Error("deleting isn’t allowed from the app");
     }
