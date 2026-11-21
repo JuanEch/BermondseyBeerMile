@@ -495,7 +495,7 @@ async function flush(){
     ({error}=await sb.from("people").upsert(row));
     toast("Selfie uploaded, but the database needs its “selfie” column before others can see it.");
   }
-  writing=false;
+  writing=false; lastWriteDone=performance.now();
   if(error){ dirty=true; toast("Couldn’t save your drinks. It’ll retry on your next tap."); }
   else if(dirty) flushSoon();
 }
@@ -558,11 +558,18 @@ $("dlAll").onclick=async()=>{
 
 // ---- Reads + live updates ----
 async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
+// Reloads can arrive late. A reload that started before our last save finished carries our old tally,
+// so we must not adopt it for our own row, or the next tap would save old tally + 1 and lose drinks.
+let peopleSeq=0, peopleApplied=0, lastWriteDone=0;
 async function loadPeople(){
+  const seq=++peopleSeq, started=performance.now();
   const {data,error}=await sb.from("people").select("*");
+  if(seq<peopleApplied) return; // an even newer reload has already been applied
+  peopleApplied=seq;
+  const fresh=started>lastWriteDone && !dirty && !writing && !writeTimer;
   // The database doesn't let the app delete rows, so admin "deletes" set counts._deleted and we hide those people.
   if(!error){ people=(data||[]).filter(p=>!(p.counts&&p.counts._deleted)); const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
-    if(me?.nickname && me.nickname!==myName && !dirty && !writing && !writeTimer){ myName=me.nickname; store.set("bm_name",myName); renderMe(); } if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
+    if(me?.nickname && me.nickname!==myName && fresh){ myName=me.nickname; store.set("bm_name",myName); renderMe(); } if(fresh) myCounts=null; render(); }
 }
 async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
 async function loadAll(){
