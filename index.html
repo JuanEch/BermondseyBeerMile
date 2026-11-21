@@ -105,6 +105,12 @@ button.avatar{cursor:pointer}
 .avatar.sm{width:30px;height:30px;font-size:.85rem;border-width:2px;display:inline-grid;vertical-align:middle;margin-right:6px}
 .avatar.big{width:84px;height:84px;font-size:2rem}
 .rank{width:2.2ch;text-align:center;font-family:var(--display);font-weight:800;color:var(--muted)}
+.sober-box{margin-top:1.4rem;padding:.9rem 1rem .3rem;border-radius:16px;border:2px dashed var(--line);background:repeating-linear-gradient(-45deg,transparent 0 14px,color-mix(in srgb,var(--line) 35%,transparent) 14px 28px)}
+.sober-box h3{font-family:var(--sign);font-weight:400;font-size:1.3rem;margin:0;color:var(--muted)}
+.sober-box .note{margin:.2rem 0 .3rem}
+.sober .avatar{filter:grayscale(1);border-color:var(--muted)}
+.sober li:last-child{border-bottom:0}
+.people.sober li .c{color:var(--muted)}
 .people .sub{display:block;font-size:.85rem;font-weight:400;color:var(--muted)}
 .selfie-pick{display:flex;align-items:center;gap:14px;cursor:pointer;margin:.2rem 0 1rem}
 .selfie-pick input{position:absolute;width:1px;height:1px;opacity:0}
@@ -168,6 +174,11 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
     <h2>Leaderboard 🏆</h2>
     <p class="empty" id="boardTotal"></p>
     <ol class="people" id="people"></ol>
+    <div class="sober-box" id="soberBox" hidden>
+      <h3>The Wall of Shameful Sobriety 🧃</h3>
+      <p class="note">Designated drivers (of supermarket trolleys). Log a drink at a new stop to climb out.</p>
+      <ol class="people sober" id="sober"></ol>
+    </div>
     <p class="note" id="meLine"></p>
   </section>
   <section class="board">
@@ -358,12 +369,16 @@ function renderBoard(){
   }).filter(r=>r.stops>0||r.name).sort((a,b)=>b.stops-a.stops||b.n-a.n);
   const grand=rows.reduce((a,r)=>a+r.n,0);
   $("boardTotal").textContent = grand ? `Ranked by stops with a drink logged. ${grand} drink${grand===1?"":"s"} between you so far.` : "No drinks logged yet. Open a stop and tap + after each one.";
-  const ul=$("people"); ul.textContent="";
+  // Bottom three go to the sober section, but the main board always keeps at least three people.
+  const shamed=Math.max(0,Math.min(3,rows.length-3));
+  const ul=$("people"), sober=$("sober"); ul.textContent=""; sober.textContent="";
+  $("soberBox").hidden=!shamed;
   rows.forEach((r,k)=>{
+    const inShame=k>=rows.length-shamed;
     const same=k>0&&rows[k-1].stops===r.stops&&rows[k-1].n===r.n;
     const pos=rows.findIndex(x=>x.stops===r.stops&&x.n===r.n);
-    const medal=r.stops?["🥇","🥈","🥉"][pos]:null;
-    ul.append(h("li",{},
+    const medal=inShame?["🧃","🥛","🫖"][k-(rows.length-shamed)]:r.stops?["🥇","🥈","🥉"][pos]:null;
+    (inShame?sober:ul).append(h("li",{},
       h("span",{class:"rank","aria-label":`Position ${pos+1}${same?" (tied)":""}`,text:medal||String(pos+1)}),
       avatar(r.name,r.selfie),
       h("span",{class:"n"},(r.name||"Someone")+(r.id===myId?" (you)":""),h("span",{class:"sub",text:`${r.n} drink${r.n===1?"":"s"}`})),
