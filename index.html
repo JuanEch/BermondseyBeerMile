@@ -569,15 +569,62 @@ async function loadAll(){
 // ---- Admin (open the page with #admin). The password is checked inside the database, never in this file. ----
 const sess={get(k){try{return sessionStorage.getItem(k)}catch{return null}},set(k,v){try{v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v)}catch{}}};
 let adminPw=sess.get("bm_admin");
+// Fallback for when supabase/admin.sql hasn't been run yet: checks this password in the page (so it's
+// visible in the source) and makes changes directly, limited to what the database lets the app do.
+const ADMIN_FALLBACK_PW="JuanVergas";
+function wrongPw(){ adminPw=null; sess.set("bm_admin",null); renderAdmin(); toast("Wrong password."); return null; }
 async function adminCall(action,target=null,value=null){
   const {data,error}=await sb.rpc("admin_action",{pw:adminPw,action,target,value});
-  if(error){
-    const msg=String(error.message||"");
-    if(/wrong password/i.test(msg)){ adminPw=null; sess.set("bm_admin",null); renderAdmin(); toast("Wrong password."); }
-    else toast(/admin_action|function/i.test(msg) ? "Admin isn’t set up in the database yet." : "That didn’t work. Check your signal and try again.");
-    return null;
+  if(!error) return data||{ok:true};
+  const msg=String(error.message||"");
+  if(/wrong password/i.test(msg)) return wrongPw();
+  if(!(error.code==="PGRST202"||/admin_action|function/i.test(msg))){ toast("That didn’t work. Check your signal and try again."); return null; }
+  if(adminPw!==ADMIN_FALLBACK_PW) return wrongPw();
+  try{ return await adminDirect(action,target,value); }
+  catch(e){ toast("The database refused that: "+(e?.message||"unknown error")); return null; }
+}
+async function adminDirect(action,target,value){
+  const rows=r=>{ if(r.error) throw r.error; return r.data||[]; };
+  if(action==="check") return {ok:true};
+  if(action==="rename_person"){
+    const d=rows(await sb.from("people").update({nickname:value.slice(0,24)}).eq("id",target).select("id"));
+    if(!d.length) throw new Error("renaming isn’t allowed from the app");
+    await sb.from("photos").update({nickname:value.slice(0,24)}).eq("person_id",target);
+    return {ok:true};
   }
-  return data||{ok:true};
+  if(action==="delete_person"){
+    const d=rows(await sb.from("people").delete().eq("id",target).select("id"));
+    if(!d.length){
+      rows(await sb.from("people").update({counts:{}}).eq("id",target));
+      toast("Deleting people isn’t allowed from the app, so their drinks were cleared instead.");
+      return {ok:true,quiet:true};
+    }
+    return {ok:true};
+  }
+  if(action==="delete_photo"){
+    const d=rows(await sb.from("photos").delete().eq("id",target).select("id,path"));
+    if(!d.length) throw new Error("deleting photos isn’t allowed from the app");
+    return {ok:true,path:d[0].path};
+  }
+  if(action==="reset"){
+    const notes=[];
+    let r=await sb.from("crawl_state").update({current:-1,closed:[],updated_at:new Date().toISOString()}).eq("id",1);
+    if(r.error) r=await sb.from("crawl_state").update({current:-1,updated_at:new Date().toISOString()}).eq("id",1);
+    if(r.error) notes.push("route position");
+    const ph=await sb.from("photos").delete().not("id","is",null).select("id");
+    const phLeft=rows(await sb.from("photos").select("id")).length;
+    if(ph.error||phLeft) notes.push("photos");
+    await sb.from("people").delete().not("id","is",null);
+    const left=rows(await sb.from("people").select("id"));
+    let peopleNote="";
+    if(left.length){
+      const z=await sb.from("people").update({counts:{}}).not("id","is",null);
+      peopleNote = z.error ? "" : " Names stayed (the database doesn’t let the app delete people), but all drinks are cleared.";
+      if(z.error) notes.push("people");
+    }
+    return {ok:true,quiet:true,msg:(notes.length?`Reset, except: ${notes.join(", ")}.`:"Crawl reset. Fresh start! 🍺")+peopleNote};
+  }
+  throw new Error("unknown action");
 }
 function maybeAdmin(){
   if(location.hash!=="#admin" && location.hash!=="#reset") return;
@@ -615,7 +662,7 @@ function renderAdmin(){
       },text:"Rename"}),
       h("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
         if(!confirm(`Delete ${p.nickname||"this person"} and their drinks? Their photos stay.`)) return;
-        if(await adminCall("delete_person",p.id)){ toast("Deleted."); loadPeople(); }
+        const r=await adminCall("delete_person",p.id); if(r){ if(!r.quiet) toast("Deleted."); loadPeople(); }
       },text:"Delete"}))));
   box.append(ul);
   // Photos
@@ -644,7 +691,7 @@ function renderAdmin(){
       const b=e.currentTarget; b.disabled=true; b.textContent="Resetting…";
       const ok=await adminCall("reset");
       b.disabled=false; b.textContent="Reset everything";
-      if(ok){ current=-1; closed=[]; people=[]; photos=[]; myCounts=null; dirty=false; render(); toast("Crawl reset. Fresh start! 🍺"); }
+      if(ok){ myCounts=null; dirty=false; toast(ok.msg||"Crawl reset. Fresh start! 🍺"); await loadState(); await Promise.all([loadPeople(),loadPhotos()]); render(); }
     },text:"Reset everything"}),
     h("p",{class:"note"},h("a",{href:"#",onclick:e=>{e.preventDefault(); adminPw=null; sess.set("bm_admin",null); renderAdmin();},text:"Lock admin"}))));
 }
