@@ -149,6 +149,7 @@ dialog.sheet::backdrop,dialog.ask::backdrop{background:rgba(0,0,0,.45)}
 .photos img{width:100%;height:100%;object-fit:cover;display:block}
 .upload{display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .upload input{position:absolute;width:1px;height:1px;opacity:0}
+.upload-row .upload{flex:1;white-space:nowrap}
 h4{font-family:var(--display);font-size:1.05rem;margin:1.2rem 0 .2rem}
 dialog.lightbox{border:0;padding:0;background:transparent;max-width:96vw;max-height:92vh}
 dialog.lightbox::backdrop{background:rgba(0,0,0,.85)}
@@ -442,7 +443,9 @@ function renderSheet(){
     for(const p of list) grid.append(h("button",{"aria-label":"Open photo",onclick:()=>openPhoto(p)},h("img",{src:photoUrl(p),alt:"Photo at "+s.name,loading:"lazy"})));
     box.append(grid);
   } else box.append(h("p",{class:"note",text:"No photos here yet."}));
-  if(sb) box.append(h("label",{class:"btn btn-main upload"},"Add a photo",h("input",{type:"file",accept:"image/*",onchange:e=>uploadPhoto(s.id,e.target)})));
+  if(sb) box.append(h("div",{class:"row upload-row"},
+    h("label",{class:"btn btn-main upload"},"Take a photo 📷",h("input",{type:"file",accept:"image/*",capture:"environment",onchange:e=>uploadPhoto(s.id,e.target)})),
+    h("label",{class:"btn btn-quiet upload"},"Choose from library",h("input",{type:"file",accept:"image/*",onchange:e=>uploadPhoto(s.id,e.target)}))));
 }
 
 // ---- Writes ----
