@@ -78,6 +78,11 @@ h1{font-family:var(--sign);font-weight:400;font-size:clamp(2.1rem,10vw,3rem);lin
 .done .pin{background:linear-gradient(var(--head) 0 30%,var(--beer) 30%);border-color:var(--beer);color:#231700}
 .current .pin{background:linear-gradient(var(--head) 0 30%,var(--beer) 30%);border-color:var(--ink);color:#231700;transform:scale(1.18);box-shadow:0 0 0 5px color-mix(in srgb,var(--beer) 35%,transparent)}
 .upcoming .pin{border-color:var(--beer);border-width:3px}
+.stop.shut .pin{background:repeating-linear-gradient(135deg,var(--arch) 0 5px,var(--surface) 5px 10px);border-color:var(--muted);color:var(--muted)}
+.stop.shut .name{text-decoration:line-through;text-decoration-thickness:2px;text-decoration-color:var(--muted)}
+.shut-tag{font-size:.78rem;font-weight:700;color:#B3361F}
+@media (prefers-color-scheme: dark){ .shut-tag{color:#FF8A70} }
+.shut-box{background:var(--foam);border-radius:14px;padding:.7rem .9rem;margin:.8rem 0}
 @media (prefers-reduced-motion:no-preference){
   .current .pin{animation:pulse 2.2s ease-in-out infinite}
   @keyframes pulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--beer) 12%,transparent)}}
@@ -255,7 +260,7 @@ function renderMe(){
 // ---- State ----
 const configured=!SUPABASE_URL.startsWith("PASTE") && !SUPABASE_KEY.startsWith("PASTE");
 const sb = configured && window.supabase ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
-let current=-1, people=[], photos=[];
+let current=-1, people=[], photos=[], closed=[];
 let myCounts=null, dirty=false, writing=false, writeTimer=null;
 let openStop=null, lbPhoto=null, zipping=false;
 
@@ -282,16 +287,17 @@ function renderStatus(){
 function renderRoute(){
   const ol=$("route"); ol.textContent="";
   STOPS.forEach((s,i)=>{
-    const cls=i<current?"done":i===current?"current":i===current+1?"upcoming":"";
+    const shut=closed.includes(s.id);
+    const cls=(i<current?"done":i===current?"current":i===current+1?"upcoming":"")+(shut?" shut":"");
     const ph=photosFor(s.id).length, dr=stopTotal(s.id);
     const meta=h("span",{class:"meta"}); if(dr) meta.append(h("span",{text:"🍺 "+dr})); if(ph) meta.append(h("span",{text:"📷 "+ph}));
     ol.append(h("li",{class:"stop "+cls},
       h("span",{class:"track","aria-hidden":"true"}),
       h("span",{class:"pin","aria-hidden":"true",text:String(i+1)}),
       h("div",{},
-        h("button",{class:"card",onclick:()=>openSheet(i),"aria-label":`Stop ${i+1}: ${s.name}${i===current?", you are here":""}`},
+        h("button",{class:"card",onclick:()=>openSheet(i),"aria-label":`Stop ${i+1}: ${s.name}${shut?", closed":""}${i===current?", you are here":""}`},
           h("span",{class:"name",text:s.name}),
-          h("span",{class:"addr"}, s.addr, i===current?h("span",{class:"tag",text:"  You’re here"}):null, i===current+1?h("span",{class:"tag",text:"  Next"}):null),
+          h("span",{class:"addr"}, s.addr, i===current?h("span",{class:"tag",text:"  You’re here"}):null, i===current+1?h("span",{class:"tag",text:"  Next"}):null, shut?h("span",{class:"shut-tag",text:i<=current?"  Closed, no pint 🚫":"  Closed 🚫"}):null),
           meta),
         s.walk&&i<STOPS.length-1?h("span",{class:"walk",text:"↓ "+(s.approx?"about ":"")+s.walk+" m walk"}):null)));
   });
@@ -320,10 +326,18 @@ function renderSheet(){
   box.append(
     h("div",{class:"sheet-head"},h("h3",{id:"sheetTitle",text:s.name}),h("button",{class:"x","aria-label":"Close",onclick:()=>$("sheet").close(),text:"✕"})),
     h("p",{class:"addr"}, s.addr+". ", h("a",{href:MAPS(s),target:"_blank",rel:"noopener",text:"Directions"})),
-    s.extra?h("p",{text:s.extra}):null,
-    s.brews?h("p",{class:"note",text:"Brews on site."}):null);
-  if(sb && i!==current) box.append(h("div",{class:"row"},h("button",{class:"btn btn-quiet",onclick:()=>setCurrent(i),text:"Mark as where we are"})));
-  box.append(h("h4",{text:"Drinks here"}),
+    ...[s.extra?h("p",{text:s.extra}):null,
+    s.brews?h("p",{class:"note",text:"Brews on site."}):null].filter(Boolean));
+  const shut=closed.includes(s.id);
+  if(sb) box.append(h("div",{class:"row"},
+    i!==current?h("button",{class:"btn btn-quiet",onclick:()=>setCurrent(i),text:"Mark as where we are"}):null,
+    shut?null:h("button",{class:"btn btn-quiet",onclick:()=>setClosed(s.id,true),text:"It’s closed 🚫"})));
+  if(shut){
+    box.append(h("div",{class:"shut-box"},
+      h("strong",{text:"Closed when we got here. 🚫"}),
+      h("p",{class:"note",text:"Counts as visited, no drinks logged. Snap a photo of the shutters for the record."}),
+      sb?h("button",{class:"btn btn-quiet",onclick:()=>setClosed(s.id,false),text:"Actually, it’s open"}):null));
+  } else box.append(h("h4",{text:"Drinks here"}),
     h("div",{class:"row"},
       h("div",{class:"counter"},
         h("button",{"aria-label":"One fewer",onclick:()=>bump(s.id,-1),disabled:mine<=0||!sb,text:"−"}),
@@ -340,6 +354,17 @@ function renderSheet(){
 }
 
 // ---- Writes ----
+async function setClosed(stopId,on){
+  if(!sb) return;
+  const prev=closed, prevCur=current, i=STOPS.findIndex(s=>s.id===stopId);
+  closed=on?[...new Set([...closed,stopId])]:closed.filter(x=>x!==stopId);
+  const patch={closed,updated_at:new Date().toISOString()};
+  if(on && i>current){ current=i; patch.current=i; }
+  render();
+  const {error}=await sb.from("crawl_state").update(patch).eq("id",1);
+  if(error){ closed=prev; current=prevCur; render(); toast("Couldn’t save that. Check your signal, or that the database has the “closed” column."); return; }
+  toast(on?`${STOPS[i].name} is shut. Onwards! 🚶`:`${STOPS[i].name} is open after all. 🍺`);
+}
 async function setCurrent(i){
   if(!sb) return;
   const prev=current; current=Math.max(-1,Math.min(i,STOPS.length-1)); render();
@@ -430,7 +455,7 @@ $("dlAll").onclick=async()=>{
 };
 
 // ---- Reads + live updates ----
-async function loadState(){ const {data,error}=await sb.from("crawl_state").select("current").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); render(); } return !error; }
+async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
 async function loadPeople(){
   const {data,error}=await sb.from("people").select("id,nickname,counts");
   if(!error){ people=data||[]; if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
@@ -447,7 +472,7 @@ else if(!sb){ $("note").textContent="Couldn’t load the page’s database libra
 else {
   loadAll();
   sb.channel("crawl")
-    .on("postgres_changes",{event:"*",schema:"public",table:"crawl_state"},p=>{ if(p.new&&Number.isInteger(p.new.current)){ current=Math.min(p.new.current,STOPS.length-1); render(); } })
+    .on("postgres_changes",{event:"*",schema:"public",table:"crawl_state"},p=>{ if(p.new&&Number.isInteger(p.new.current)){ current=Math.min(p.new.current,STOPS.length-1); if(Array.isArray(p.new.closed)) closed=p.new.closed; render(); } })
     .on("postgres_changes",{event:"*",schema:"public",table:"people"},()=>loadPeople())
     .on("postgres_changes",{event:"*",schema:"public",table:"photos"},()=>loadPhotos())
     .subscribe();
