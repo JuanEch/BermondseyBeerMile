@@ -161,6 +161,8 @@ dialog.ask h3{font-family:var(--display);margin:0 0 .4rem;font-size:1.4rem}
 dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);margin:.6rem 0 1rem}
 .toast{position:fixed;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:.6rem 1rem;border-radius:12px;max-width:90vw;z-index:50;font-size:.95rem}
 .toast[hidden]{display:none}
+.update-bar{position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top,0px));transform:translateX(-50%);z-index:55;border:0;border-radius:999px;padding:.7rem 1.2rem;font-weight:700;cursor:pointer;background:var(--ink);color:var(--bg);box-shadow:0 6px 20px -6px #0008;max-width:92vw}
+.update-bar[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -217,6 +219,7 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
   </form>
 </dialog>
 <div class="toast" id="toast" hidden role="status"></div>
+<button class="update-bar" id="update" hidden>A new version is out. Tap to update.</button>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
@@ -273,6 +276,16 @@ function cheers(rect,n=10){
     host.append(e); setTimeout(()=>e.remove(),1200);
   }
 }
+// Bump this on every change. Phones compare it with the live page and offer to update.
+const APP_VERSION="2026-11-21.3";
+async function checkVersion(){
+  try{
+    const r=await fetch(location.pathname+"?v="+Date.now(),{cache:"no-store"}); if(!r.ok) return;
+    const m=(await r.text()).match(/const APP_VERSION="([^"]+)"/);
+    if(m && m[1]!==APP_VERSION) $("update").hidden=false;
+  }catch{}
+}
+$("update").onclick=async()=>{ try{ await flush(); }catch{} location.reload(); };
 let toastT;
 function toast(msg){ const t=$("toast"); t.textContent=msg; t.hidden=false; clearTimeout(toastT); toastT=setTimeout(()=>t.hidden=true,3500); }
 
@@ -304,7 +317,7 @@ function askName(edit=false){
     d.onclose=()=>{
       const v=$("askName").value.trim();
       if(d.returnValue==="ok" && v){
-        myName=v; store.set("bm_name",v); dirty=true;
+        myName=v; store.set("bm_name",v); profileDirty=true;
         if(pendingSelfie) saveSelfie(pendingSelfie);
         renderMe(); render(); flushSoon(); res(true);
       } else res(false);
@@ -319,7 +332,7 @@ async function saveSelfie(blob){
   const path=`selfies/${myId}-${Date.now()}.jpg`;
   const up=await sb.storage.from("photos").upload(path,blob,{contentType:"image/jpeg",upsert:false});
   if(up.error){ toast("Couldn’t upload your selfie. Try again from Edit profile."); return; }
-  mySelfie=path; store.set("bm_selfie",path); dirty=true; flushSoon(); renderMe(); render();
+  mySelfie=path; store.set("bm_selfie",path); profileDirty=true; flushSoon(); renderMe(); render();
   toast("Looking good. 📸");
 }
 function renderMe(){
@@ -332,11 +345,24 @@ function renderMe(){
 const configured=!SUPABASE_URL.startsWith("PASTE") && !SUPABASE_KEY.startsWith("PASTE");
 const sb = configured && window.supabase ? supabase.createClient(SUPABASE_URL, SUPABASE_KEY) : null;
 let current=-1, people=[], photos=[], closed=[];
-let myCounts=null, dirty=false, writing=false, writeTimer=null;
+// ---- Your own tally ----
+// This phone is the source of truth for its own tally, kept in the browser so it survives the tab being
+// reloaded. Every save carries a revision number (_rev): a late or out-of-order reload can never replace newer
+// taps, while an admin delete/reset (which writes counts without _rev) is recognised and accepted.
+let profileDirty=false, writing=false, writeTimer=null, retryMs=0, memMine=null, mineReady=false, lastWriteDone=0;
+function getMine(){ const raw=store.get("bm_counts"); if(raw){ try{ const v=JSON.parse(raw); if(v&&v.counts) return v; }catch{} } return memMine?JSON.parse(JSON.stringify(memMine)):null; }
+function setMine(v){ memMine=v; store.set("bm_counts",JSON.stringify(v)); }
+const pending=()=>{ const m=getMine(); return !!m && m.rev>(m.acked||0); };
+const cleanCounts=c=>{ const o={}; for(const st of STOPS){ const n=+((c||{})[st.id])||0; if(n>0) o[st.id]=n; } return o; };
+const myCountsNow=()=>{ const m=getMine(); return m ? m.counts : cleanCounts(people.find(p=>p.id===myId)?.counts); };
 let openStop=null, lbPhoto=null, zipping=false;
 
-const countsFor = p => (p.id===myId && myCounts) ? myCounts : (p.counts||{});
-function allPeople(){ const list=people.filter(p=>p.id!==myId); if(myCounts||dirty||writing||writeTimer||people.some(p=>p.id===myId)) list.push({id:myId,nickname:myName,selfie:mySelfie||people.find(p=>p.id===myId)?.selfie,counts:myCounts||people.find(p=>p.id===myId)?.counts||{}}); return list; }
+const countsFor = p => p.id===myId ? myCountsNow() : (p.counts||{});
+function allPeople(){
+  const list=people.filter(p=>p.id!==myId), row=people.find(p=>p.id===myId);
+  if(row||pending()||writing) list.push({id:myId,nickname:myName,selfie:mySelfie||row?.selfie,counts:myCountsNow()});
+  return list;
+}
 const stopTotal = id => allPeople().reduce((n,p)=>n+(+countsFor(p)[id]||0),0);
 const photosFor = id => photos.filter(p=>p.stop===id);
 const photoUrl = p => sb.storage.from("photos").getPublicUrl(p.path).data.publicUrl;
@@ -414,7 +440,7 @@ $("sheet").addEventListener("click",e=>{ if(e.target===$("sheet")) $("sheet").cl
 $("sheet").addEventListener("close",()=>{ openStop=null; });
 function renderSheet(){
   const i=openStop, s=STOPS[i], box=$("sheetIn");
-  const mine=+((myCounts||people.find(p=>p.id===myId)?.counts||{})[s.id])||0, group=stopTotal(s.id), list=photosFor(s.id);
+  const mine=+myCountsNow()[s.id]||0, group=stopTotal(s.id), list=photosFor(s.id);
   box.textContent="";
   box.append(
     h("div",{class:"sheet-head"},h("h3",{id:"sheetTitle",text:s.name}),h("button",{class:"x","aria-label":"Close",onclick:()=>$("sheet").close(),text:"✕"})),
@@ -476,18 +502,20 @@ $("undo").onclick=()=>setCurrent(current-1);
 
 async function bump(stopId,d){
   if(!(await askName())) return false;
-  if(!myCounts) myCounts={...(people.find(p=>p.id===myId)?.counts||{})};
-  myCounts[stopId]=Math.max(0,(+myCounts[stopId]||0)+d);
-  dirty=true; flushSoon(); render(); return true;
+  if(!mineReady){ toast("Still loading your drinks. Try again in a second."); return false; }
+  const m=getMine()||{rev:0,acked:0,counts:{}};
+  m.counts={...m.counts}; m.counts[stopId]=Math.max(0,(+m.counts[stopId]||0)+d);
+  if(!m.counts[stopId]) delete m.counts[stopId];
+  m.rev++; setMine(m); flushSoon(); render(); return true;
 }
-function flushSoon(){ clearTimeout(writeTimer); writeTimer=setTimeout(flush,600); }
+function flushSoon(ms=300){ clearTimeout(writeTimer); writeTimer=setTimeout(flush,ms); }
 async function flush(){
-  writeTimer=null;
-  if(writing||!sb||!myName) return;
-  if(!dirty && people.some(p=>p.id===myId && p.nickname===myName && (selfieColMissing||!mySelfie||p.selfie===mySelfie))) return;
-  writing=true; dirty=false;
-  const counts={...(myCounts||people.find(p=>p.id===myId)?.counts||{})}; delete counts._deleted;
-  const row={id:myId,nickname:myName,counts,updated_at:new Date().toISOString()};
+  clearTimeout(writeTimer); writeTimer=null;
+  if(writing||!sb||!myName||!mineReady) return;
+  const m=getMine()||{rev:0,acked:0,counts:{}};
+  if(!(m.rev>(m.acked||0)) && !profileDirty) return;
+  writing=true; profileDirty=false;
+  const row={id:myId,nickname:myName,counts:{...cleanCounts(m.counts),_rev:m.rev},updated_at:new Date().toISOString()};
   if(mySelfie && !selfieColMissing) row.selfie=mySelfie;
   let {error}=await sb.from("people").upsert(row);
   if(error && row.selfie && /selfie/i.test(error.message||"")){
@@ -496,8 +524,15 @@ async function flush(){
     toast("Selfie uploaded, but the database needs its “selfie” column before others can see it.");
   }
   writing=false; lastWriteDone=performance.now();
-  if(error){ dirty=true; toast("Couldn’t save your drinks. It’ll retry on your next tap."); }
-  else if(dirty) flushSoon();
+  if(error){
+    profileDirty=true;
+    if(!retryMs) toast("Couldn’t save your drinks yet. Retrying…");
+    retryMs=Math.min(30000,(retryMs||1000)*2); writeTimer=setTimeout(flush,retryMs); return;
+  }
+  retryMs=0;
+  const cur=getMine();
+  if(cur){ cur.acked=Math.max(cur.acked||0,m.rev); setMine(cur); }
+  if(pending()||profileDirty) flushSoon();
 }
 
 async function shrink(file,max=1600){
@@ -558,18 +593,37 @@ $("dlAll").onclick=async()=>{
 
 // ---- Reads + live updates ----
 async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
-// Reloads can arrive late. A reload that started before our last save finished carries our old tally,
-// so we must not adopt it for our own row, or the next tap would save old tally + 1 and lose drinks.
-let peopleSeq=0, peopleApplied=0, lastWriteDone=0;
+let peopleSeq=0, peopleApplied=0;
 async function loadPeople(){
   const seq=++peopleSeq, started=performance.now();
   const {data,error}=await sb.from("people").select("*");
-  if(seq<peopleApplied) return; // an even newer reload has already been applied
+  if(error||seq<peopleApplied) return; // failed, or an even newer reload has already been applied
   peopleApplied=seq;
-  const fresh=started>lastWriteDone && !dirty && !writing && !writeTimer;
-  // The database doesn't let the app delete rows, so admin "deletes" set counts._deleted and we hide those people.
-  if(!error){ people=(data||[]).filter(p=>!(p.counts&&p.counts._deleted)); const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
-    if(me?.nickname && me.nickname!==myName && fresh){ myName=me.nickname; store.set("bm_name",myName); renderMe(); } if(fresh) myCounts=null; render(); }
+  const all=data||[], row=all.find(p=>p.id===myId);
+  // Admin "deletes" can't remove rows, so they set counts._deleted; those people are hidden.
+  people=all.filter(p=>!(p.counts&&p.counts._deleted));
+  // Only trust this reload about our own row if it started after our last save finished.
+  const fresh=started>lastWriteDone && !writing;
+  if(fresh) reconcileMine(row);
+  if(row?.selfie && !mySelfie){ mySelfie=row.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
+  if(fresh && row?.nickname && row.nickname!==myName && !profileDirty && !row.counts?._deleted){ myName=row.nickname; store.set("bm_name",myName); renderMe(); }
+  if(pending()||profileDirty) flushSoon();
+  render();
+}
+function reconcileMine(row){
+  const m=getMine(), sc=row?.counts||{}, sRev=typeof sc._rev==="number"?sc._rev:null;
+  const theirs=()=>sc._deleted?{}:cleanCounts(sc);
+  mineReady=true;
+  if(!m){ setMine({rev:sRev||0,acked:sRev||0,counts:theirs(),reset:sc._deleted?String(sc._reset||"old"):undefined}); return; } // first load in this browser
+  if(!row){ if(m.acked>0 && m.rev===m.acked) setMine({...m,counts:{}}); return; }      // wiped in the database (unless our first save is still on its way)
+  if(sc._deleted){                                                                   // admin delete/reset: apply each one exactly once
+    const stamp=String(sc._reset||"old");
+    if(m.reset!==stamp) setMine({rev:m.rev,acked:m.rev,counts:{},reset:stamp});
+    return;
+  }
+  if(sRev===null) return;                                                           // saved by an old version of the app: this phone's tally wins
+  if(sRev>m.rev){ setMine({...m,rev:sRev,acked:sRev,counts:theirs()}); return; }    // saved from another tab
+  // Otherwise ours is the same or newer; flush saves anything not yet saved.
 }
 async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
 async function loadAll(){
@@ -588,6 +642,7 @@ async function adminCall(action,target=null,value=null){
   try{ return await adminDirect(action,target,value); }
   catch(e){ toast("The database refused that: "+(e?.message||"unknown error")); return null; }
 }
+const resetStamp=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 async function adminDirect(action,target,value){
   const rows=r=>{ if(r.error) throw r.error; return r.data||[]; };
   if(action==="check") return {ok:true};
@@ -601,7 +656,7 @@ async function adminDirect(action,target,value){
     // A real delete may be refused outright or silently remove nothing; either way, hide them instead.
     const del=await sb.from("people").delete().eq("id",target).select("id");
     if(del.error||!(del.data||[]).length){
-      const u=rows(await sb.from("people").update({counts:{_deleted:true}}).eq("id",target).select("id"));
+      const u=rows(await sb.from("people").update({counts:{_deleted:true,_reset:resetStamp()}}).eq("id",target).select("id"));
       if(!u.length) throw new Error("deleting isn’t allowed from the app");
     }
     return {ok:true};
@@ -622,7 +677,7 @@ async function adminDirect(action,target,value){
     await sb.from("people").delete().not("id","is",null);
     const left=rows(await sb.from("people").select("id"));
     if(left.length){
-      const z=await sb.from("people").update({counts:{_deleted:true}}).not("id","is",null);
+      const z=await sb.from("people").update({counts:{_deleted:true,_reset:resetStamp()}}).not("id","is",null);
       if(z.error) notes.push("people");
     }
     return {ok:true,quiet:true,msg:notes.length?`Reset, except: ${notes.join(", ")}.`:"Crawl reset. Fresh start! 🍺"};
@@ -694,7 +749,7 @@ function renderAdmin(){
       const b=e.currentTarget; b.disabled=true; b.textContent="Resetting…";
       const ok=await adminCall("reset");
       b.disabled=false; b.textContent="Reset everything";
-      if(ok){ myCounts=null; dirty=false; toast(ok.msg||"Crawl reset. Fresh start! 🍺"); await loadState(); await Promise.all([loadPeople(),loadPhotos()]); render(); }
+      if(ok){ toast(ok.msg||"Crawl reset. Fresh start! 🍺"); await loadState(); await Promise.all([loadPeople(),loadPhotos()]); render(); }
     },text:"Reset everything"}),
     h("p",{class:"note"},h("a",{href:"#",onclick:e=>{e.preventDefault(); adminPw=null; sess.set("bm_admin",null); renderAdmin();},text:"Lock admin"}))));
 }
@@ -711,9 +766,13 @@ else {
     .on("postgres_changes",{event:"*",schema:"public",table:"photos"},()=>loadPhotos())
     .subscribe();
   // Phones drop live connections when the screen locks, so refresh on return and every 20s as a backstop.
-  document.addEventListener("visibilitychange",()=>{ if(!document.hidden) loadAll(); });
+  // Save straight away when the phone locks or you switch apps, in case the tab gets closed in the background.
+  const saveNow=()=>{ if(pending()||profileDirty) flush(); };
+  document.addEventListener("visibilitychange",()=>{ if(document.hidden) saveNow(); else { loadAll(); checkVersion(); } });
+  window.addEventListener("pagehide",saveNow);
+  window.addEventListener("online",()=>{ loadAll(); saveNow(); });
   setInterval(()=>{ if(!document.hidden) loadAll(); },20000);
-  if(myName) flushSoon();
+  setInterval(checkVersion,120000);
 }
 </script>
 </body>
