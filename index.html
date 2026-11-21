@@ -566,20 +566,14 @@ async function loadAll(){
   $("note").textContent = ok ? "" : "Can’t reach the shared route right now. What you see may be out of date.";
 }
 
-// ---- Admin (open the page with #admin). The password is checked inside the database, never in this file. ----
+// ---- Admin (open the page with #admin) ----
 const sess={get(k){try{return sessionStorage.getItem(k)}catch{return null}},set(k,v){try{v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v)}catch{}}};
 let adminPw=sess.get("bm_admin");
-// Fallback for when supabase/admin.sql hasn't been run yet: checks this password in the page (so it's
-// visible in the source) and makes changes directly, limited to what the database lets the app do.
-const ADMIN_FALLBACK_PW="JuanVergas";
+// The admin password is checked here in the page. The app's database key can already make these changes.
+const ADMIN_PW="JuanVergas";
 function wrongPw(){ adminPw=null; sess.set("bm_admin",null); renderAdmin(); toast("Wrong password."); return null; }
 async function adminCall(action,target=null,value=null){
-  const {data,error}=await sb.rpc("admin_action",{pw:adminPw,action,target,value});
-  if(!error) return data||{ok:true};
-  const msg=String(error.message||"");
-  if(/wrong password/i.test(msg)) return wrongPw();
-  if(!(error.code==="PGRST202"||/admin_action|function/i.test(msg))){ toast("That didn’t work. Check your signal and try again."); return null; }
-  if(adminPw!==ADMIN_FALLBACK_PW) return wrongPw();
+  if(adminPw!==ADMIN_PW) return wrongPw();
   try{ return await adminDirect(action,target,value); }
   catch(e){ toast("The database refused that: "+(e?.message||"unknown error")); return null; }
 }
