@@ -62,6 +62,15 @@ h1{font-family:var(--sign);font-weight:400;font-size:clamp(2.1rem,10vw,3rem);lin
 .btn-main:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 #B06A00}
 .btn-quiet{background:transparent;border:1.5px solid var(--line);color:var(--ink)}
 .btn-danger{flex:1;background:#B3361F;color:#fff}
+.btn-sm{min-height:36px;padding:.35rem .8rem;font-size:.85rem;flex:none}
+.admin-login input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px solid var(--line);background:var(--bg);margin:.6rem 0 1rem}
+.admin-login .btn{width:100%}
+.admin-acts{display:flex;gap:6px;flex:none}
+.admin-photos{grid-template-columns:repeat(2,1fr);gap:10px}
+.admin-photos figure{margin:0;display:flex;flex-direction:column;gap:4px}
+.admin-photos figure>button:first-child{all:unset;cursor:pointer;aspect-ratio:1;border-radius:10px;overflow:hidden;background:var(--bg)}
+.admin-photos figcaption{font-size:.78rem;color:var(--muted);line-height:1.3}
+.danger{margin-top:1.6rem;padding:.2rem 1rem .8rem;border:2px solid #B3361F55;border-radius:14px}
 .btn:disabled{opacity:.45;cursor:default}
 .note{font-size:.9rem;color:var(--muted);margin:.5rem 0 0}
 .note:empty{display:none}
@@ -196,14 +205,7 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
   <div class="lb-bar"><span id="lbBy"></span><button class="btn btn-quiet" id="lbClose">Close</button></div>
   <img id="lbImg" alt="">
 </dialog>
-<dialog class="ask" id="reset" aria-labelledby="resetTitle">
-  <form method="dialog" id="resetForm">
-    <h3 id="resetTitle">Reset the crawl</h3>
-    <p class="note">Deletes everyone’s names, drinks and photos, and puts the route back to the start. This can’t be undone.</p>
-    <input id="resetPw" type="password" autocomplete="current-password" required placeholder="Password">
-    <div class="actions"><button class="btn btn-quiet" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="btn btn-danger" id="resetGo" value="ok">Reset everything</button></div>
-  </form>
-</dialog>
+<dialog class="sheet" id="admin" aria-labelledby="adminTitle"><div class="sheet-in" id="adminIn"></div></dialog>
 <dialog class="ask" id="ask">
   <form method="dialog" id="askForm">
     <h3>Join the crawl</h3>
@@ -341,6 +343,7 @@ const photoUrl = p => sb.storage.from("photos").getPublicUrl(p.path).data.public
 function render(){
   renderStatus(); renderRoute(); renderBoard(); renderPhotoBox();
   if(openStop!=null && $("sheet").open) renderSheet();
+  if($("admin").open) renderAdmin();
 }
 function renderStatus(){
   const last=STOPS.length-1, nxt=current+1<=last?STOPS[current+1]:null;
@@ -554,7 +557,8 @@ $("dlAll").onclick=async()=>{
 async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
 async function loadPeople(){
   const {data,error}=await sb.from("people").select("*");
-  if(!error){ people=data||[]; const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); } if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
+  if(!error){ people=data||[]; const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
+    if(me?.nickname && me.nickname!==myName && !dirty && !writing && !writeTimer){ myName=me.nickname; store.set("bm_name",myName); renderMe(); } if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
 }
 async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
 async function loadAll(){
@@ -562,32 +566,91 @@ async function loadAll(){
   $("note").textContent = ok ? "" : "Can’t reach the shared route right now. What you see may be out of date.";
 }
 
-// ---- Reset (open the page with #reset). The password is checked inside the database, never in this file. ----
-function maybeReset(){
-  if(location.hash!=="#reset") return;
-  if(!sb){ toast("This page isn’t connected to its database."); return; }
-  $("resetPw").value=""; $("resetGo").disabled=false; $("reset").showModal();
-}
-$("reset").addEventListener("close",()=>{ if(location.hash==="#reset") history.replaceState(null,"",location.pathname+location.search); });
-$("resetForm").addEventListener("submit",async e=>{
-  if(e.submitter?.value!=="ok") return;
-  e.preventDefault();
-  const pw=$("resetPw").value; if(!pw) return;
-  $("resetGo").disabled=true; $("resetGo").textContent="Resetting…";
-  const {error}=await sb.rpc("reset_crawl",{pw});
-  $("resetGo").disabled=false; $("resetGo").textContent="Reset everything";
+// ---- Admin (open the page with #admin). The password is checked inside the database, never in this file. ----
+const sess={get(k){try{return sessionStorage.getItem(k)}catch{return null}},set(k,v){try{v==null?sessionStorage.removeItem(k):sessionStorage.setItem(k,v)}catch{}}};
+let adminPw=sess.get("bm_admin");
+async function adminCall(action,target=null,value=null){
+  const {data,error}=await sb.rpc("admin_action",{pw:adminPw,action,target,value});
   if(error){
     const msg=String(error.message||"");
-    toast(/wrong password/i.test(msg) ? "Wrong password." : /reset_crawl|function/i.test(msg) ? "Reset isn’t set up in the database yet." : "Couldn’t reset. Check your signal and try again.");
+    if(/wrong password/i.test(msg)){ adminPw=null; sess.set("bm_admin",null); renderAdmin(); toast("Wrong password."); }
+    else toast(/admin_action|function/i.test(msg) ? "Admin isn’t set up in the database yet." : "That didn’t work. Check your signal and try again.");
+    return null;
+  }
+  return data||{ok:true};
+}
+function maybeAdmin(){
+  if(location.hash!=="#admin" && location.hash!=="#reset") return;
+  if(!sb){ toast("This page isn’t connected to its database."); return; }
+  renderAdmin(); if(!$("admin").open) $("admin").showModal();
+}
+$("admin").addEventListener("close",()=>{ if(/^#(admin|reset)$/.test(location.hash)) history.replaceState(null,"",location.pathname+location.search); });
+function renderAdmin(){
+  const box=$("adminIn"); box.textContent="";
+  box.append(h("div",{class:"sheet-head"},h("h3",{id:"adminTitle",text:"Admin"}),h("button",{class:"x","aria-label":"Close",onclick:()=>$("admin").close(),text:"✕"})));
+  if(!adminPw){
+    const pw=h("input",{type:"password",autocomplete:"current-password",required:true,placeholder:"Password","aria-label":"Admin password"});
+    const go=h("button",{class:"btn btn-main",text:"Unlock"});
+    box.append(h("form",{class:"admin-login",onsubmit:async e=>{
+      e.preventDefault(); if(!pw.value) return;
+      adminPw=pw.value; go.disabled=true; go.textContent="Checking…";
+      const ok=await adminCall("check"); go.disabled=false; go.textContent="Unlock";
+      if(ok){ sess.set("bm_admin",adminPw); renderAdmin(); }
+    }},h("p",{class:"note",text:"Enter the admin password to manage people and photos."}),pw,go));
+    setTimeout(()=>pw.focus(),50);
     return;
   }
-  $("reset").close();
-  current=-1; closed=[]; people=[]; photos=[]; myCounts=null; dirty=false;
-  render(); toast("Crawl reset. Fresh start! 🍺");
-});
-window.addEventListener("hashchange",maybeReset);
+  // People
+  const list=[...people].map(p=>{const c=p.counts||{};return {...p,stops:STOPS.filter(s=>(+c[s.id]||0)>0).length,n:STOPS.reduce((a,s)=>a+(+c[s.id]||0),0)};}).sort((a,b)=>String(a.nickname||"").localeCompare(String(b.nickname||"")));
+  box.append(h("h4",{text:`People (${list.length})`}));
+  if(!list.length) box.append(h("p",{class:"note",text:"Nobody has joined yet."}));
+  const ul=h("ul",{class:"people admin-list"});
+  for(const p of list) ul.append(h("li",{},
+    avatar(p.nickname,p.selfie),
+    h("span",{class:"n"},(p.nickname||"Someone")+(p.id===myId?" (this phone)":""),h("span",{class:"sub",text:`${p.stops} stop${p.stops===1?"":"s"} · ${p.n} drink${p.n===1?"":"s"}`})),
+    h("span",{class:"admin-acts"},
+      h("button",{class:"btn btn-quiet btn-sm",onclick:async()=>{
+        const v=prompt(`Rename ${p.nickname||"this person"} to:`,p.nickname||""); if(v==null||!v.trim()) return;
+        if(await adminCall("rename_person",p.id,v.trim())){ toast("Renamed."); loadPeople(); loadPhotos(); }
+      },text:"Rename"}),
+      h("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
+        if(!confirm(`Delete ${p.nickname||"this person"} and their drinks? Their photos stay.`)) return;
+        if(await adminCall("delete_person",p.id)){ toast("Deleted."); loadPeople(); }
+      },text:"Delete"}))));
+  box.append(ul);
+  // Photos
+  const ph=[...photos].sort((a,b)=>String(b.created_at).localeCompare(String(a.created_at)));
+  box.append(h("h4",{text:`Photos (${ph.length})`}));
+  if(!ph.length) box.append(h("p",{class:"note",text:"No photos yet."}));
+  const grid=h("div",{class:"photos admin-photos"});
+  for(const p of ph){
+    const stop=STOPS.find(s=>s.id===p.stop);
+    grid.append(h("figure",{},
+      h("button",{"aria-label":"Open photo",onclick:()=>openPhoto(p)},h("img",{src:photoUrl(p),alt:"Photo at "+(stop?.name||"a stop"),loading:"lazy"})),
+      h("figcaption",{text:`${stop?.name||"?"} · ${p.nickname||"Someone"}`}),
+      h("button",{class:"btn btn-danger btn-sm",onclick:async()=>{
+        if(!confirm("Delete this photo for everyone?")) return;
+        const r=await adminCall("delete_photo",String(p.id));
+        if(r){ if(r.path) sb.storage.from("photos").remove([r.path]).catch(()=>{}); toast("Photo deleted."); loadPhotos(); }
+      },text:"Delete"})));
+  }
+  box.append(grid);
+  // Danger zone
+  box.append(h("div",{class:"danger"},
+    h("h4",{text:"Reset everything"}),
+    h("p",{class:"note",text:"Deletes everyone’s names, drinks and photos, and puts the route back to the start. This can’t be undone."}),
+    h("button",{class:"btn btn-danger",onclick:async e=>{
+      if(!confirm("Really wipe the whole crawl?")) return;
+      const b=e.currentTarget; b.disabled=true; b.textContent="Resetting…";
+      const ok=await adminCall("reset");
+      b.disabled=false; b.textContent="Reset everything";
+      if(ok){ current=-1; closed=[]; people=[]; photos=[]; myCounts=null; dirty=false; render(); toast("Crawl reset. Fresh start! 🍺"); }
+    },text:"Reset everything"}),
+    h("p",{class:"note"},h("a",{href:"#",onclick:e=>{e.preventDefault(); adminPw=null; sess.set("bm_admin",null); renderAdmin();},text:"Lock admin"}))));
+}
+window.addEventListener("hashchange",maybeAdmin);
 
-render(); renderMe(); maybeReset();
+render(); renderMe(); maybeAdmin();
 if(!configured){ $("note").textContent="This page isn’t connected to its database yet. Add the Supabase URL and key at the top of the file."; }
 else if(!sb){ $("note").textContent="Couldn’t load the page’s database library. Check your connection and reload."; }
 else {
