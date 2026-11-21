@@ -142,7 +142,7 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
 
 <dialog class="sheet" id="sheet" aria-labelledby="sheetTitle"><div class="sheet-in" id="sheetIn"></div></dialog>
 <dialog class="lightbox" id="lightbox">
-  <div class="lb-bar"><span id="lbBy"></span><span style="display:flex;gap:8px"><button class="btn btn-quiet" id="lbDel" hidden>Remove</button><button class="btn btn-quiet" id="lbClose">Close</button></span></div>
+  <div class="lb-bar"><span id="lbBy"></span><button class="btn btn-quiet" id="lbClose">Close</button></div>
   <img id="lbImg" alt="">
 </dialog>
 <dialog class="ask" id="ask">
@@ -363,18 +363,10 @@ async function uploadPhoto(stopId,input){
 function openPhoto(p){
   lbPhoto=p; $("lbImg").src=photoUrl(p);
   $("lbBy").textContent = p.person_id===myId ? "You" : (p.nickname||"Someone");
-  $("lbDel").hidden = p.person_id!==myId;
   $("lightbox").showModal();
 }
 $("lbClose").onclick=()=>$("lightbox").close();
 $("lightbox").addEventListener("click",e=>{ if(e.target===$("lightbox")) $("lightbox").close(); });
-$("lbDel").onclick=async()=>{
-  const p=lbPhoto; if(!p||!confirm("Remove this photo for everyone?")) return;
-  const {error}=await sb.from("photos").delete().eq("id",p.id);
-  if(error){ toast("Couldn’t remove that photo."); return; }
-  sb.storage.from("photos").remove([p.path]);
-  $("lightbox").close(); toast("Photo removed."); loadPhotos();
-};
 
 const slug=s=>s.toLowerCase().replace(/[’']/g,"").replace(/&/g,"and").replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"");
 $("dlAll").onclick=async()=>{
