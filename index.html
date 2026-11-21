@@ -483,7 +483,7 @@ async function flush(){
   if(writing||!sb||!myName) return;
   if(!dirty && people.some(p=>p.id===myId && p.nickname===myName && (selfieColMissing||!mySelfie||p.selfie===mySelfie))) return;
   writing=true; dirty=false;
-  const counts=myCounts||people.find(p=>p.id===myId)?.counts||{};
+  const counts={...(myCounts||people.find(p=>p.id===myId)?.counts||{})}; delete counts._deleted;
   const row={id:myId,nickname:myName,counts,updated_at:new Date().toISOString()};
   if(mySelfie && !selfieColMissing) row.selfie=mySelfie;
   let {error}=await sb.from("people").upsert(row);
@@ -557,7 +557,8 @@ $("dlAll").onclick=async()=>{
 async function loadState(){ const {data,error}=await sb.from("crawl_state").select("*").eq("id",1).maybeSingle(); if(!error&&data){ current=Math.min(data.current,STOPS.length-1); closed=Array.isArray(data.closed)?data.closed:[]; render(); } return !error; }
 async function loadPeople(){
   const {data,error}=await sb.from("people").select("*");
-  if(!error){ people=data||[]; const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
+  // The database doesn't let the app delete rows, so admin "deletes" set counts._deleted and we hide those people.
+  if(!error){ people=(data||[]).filter(p=>!(p.counts&&p.counts._deleted)); const me=people.find(p=>p.id===myId); if(me?.selfie && !mySelfie){ mySelfie=me.selfie; store.set("bm_selfie",mySelfie); renderMe(); }
     if(me?.nickname && me.nickname!==myName && !dirty && !writing && !writeTimer){ myName=me.nickname; store.set("bm_name",myName); renderMe(); } if(!dirty&&!writing&&!writeTimer) myCounts=null; render(); }
 }
 async function loadPhotos(){ const {data,error}=await sb.from("photos").select("*").order("created_at"); if(!error){ photos=(data||[]).filter(p=>STOPS.some(s=>s.id===p.stop)); render(); } }
@@ -589,9 +590,8 @@ async function adminDirect(action,target,value){
   if(action==="delete_person"){
     const d=rows(await sb.from("people").delete().eq("id",target).select("id"));
     if(!d.length){
-      rows(await sb.from("people").update({counts:{}}).eq("id",target));
-      toast("Deleting people isn’t allowed from the app, so their drinks were cleared instead.");
-      return {ok:true,quiet:true};
+      const u=rows(await sb.from("people").update({counts:{_deleted:true}}).eq("id",target).select("id"));
+      if(!u.length) throw new Error("deleting isn’t allowed from the app");
     }
     return {ok:true};
   }
@@ -610,13 +610,11 @@ async function adminDirect(action,target,value){
     if(ph.error||phLeft) notes.push("photos");
     await sb.from("people").delete().not("id","is",null);
     const left=rows(await sb.from("people").select("id"));
-    let peopleNote="";
     if(left.length){
-      const z=await sb.from("people").update({counts:{}}).not("id","is",null);
-      peopleNote = z.error ? "" : " Names stayed (the database doesn’t let the app delete people), but all drinks are cleared.";
+      const z=await sb.from("people").update({counts:{_deleted:true}}).not("id","is",null);
       if(z.error) notes.push("people");
     }
-    return {ok:true,quiet:true,msg:(notes.length?`Reset, except: ${notes.join(", ")}.`:"Crawl reset. Fresh start! 🍺")+peopleNote};
+    return {ok:true,quiet:true,msg:notes.length?`Reset, except: ${notes.join(", ")}.`:"Crawl reset. Fresh start! 🍺"};
   }
   throw new Error("unknown action");
 }
