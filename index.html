@@ -141,7 +141,7 @@ dialog.ask input{width:100%;padding:.7rem .9rem;border-radius:12px;border:1.5px 
     <div class="bubbles" aria-hidden="true"><i style="--x:6%;--y:20%;--s:6px;--d:0s;--t:5.5s"></i><i style="--x:14%;--y:55%;--s:4px;--d:1.8s;--t:4.2s"></i><i style="--x:27%;--y:35%;--s:7px;--d:3.1s;--t:6.4s"></i><i style="--x:41%;--y:12%;--s:5px;--d:0.7s;--t:5s"></i><i style="--x:55%;--y:62%;--s:4px;--d:2.4s;--t:4.6s"></i><i style="--x:68%;--y:28%;--s:8px;--d:1.2s;--t:7s"></i><i style="--x:79%;--y:48%;--s:5px;--d:3.6s;--t:5.2s"></i><i style="--x:88%;--y:18%;--s:6px;--d:0.3s;--t:6s"></i><i style="--x:94%;--y:70%;--s:4px;--d:2.9s;--t:4.4s"></i></div>
     <p class="kicker">Bermondsey pub crawl · Cheers!</p>
     <h1>The Beer Mile</h1>
-    <p class="sub">From The Kernel to Southwark Brewing, under the Bermondsey arches. Tap any stop to count drinks and add photos.</p>
+    <p class="sub">From The Kernel, under the Bermondsey arches, all the way to Belushi’s. Tap any stop to count drinks and add photos.</p>
   </header>
   <div class="status">
     <p class="now" id="now">Not started yet</p>
@@ -207,7 +207,10 @@ const STOPS = [
   {id:"barrel",   name:"The Barrel Project",                addr:"80 Druid Street",     walk:90, approx:true},
   {id:"doodle",   name:"The Doodle Bar",                    addr:"60 Druid Street",     walk:70, approx:true, extra:"Chalkboard walls: leave your mark."},
   {id:"kanpai",   name:"Kanpai Taproom & Kitchen",          addr:"48 Druid Street",     walk:3,   brews:true},
-  {id:"southwark",name:"Southwark Brewing",                 addr:"46 Druid Street",     walk:170, brews:true},
+  {id:"southwark",name:"Southwark Brewing",                 addr:"46 Druid Street",     walk:300, approx:true, brews:true},
+  {id:"hopkingdom",name:"Hop Kingdom",                      addr:"16 Druid Street",     walk:900, approx:true, brews:true, extra:"Taproom and indoor skatepark. Maybe skate before the drinks, not after."},
+  {id:"george",   name:"The George Inn",                    addr:"77 Borough High Street", walk:300, approx:true, extra:"A 17th-century galleried coaching inn, run by the National Trust."},
+  {id:"belushis", name:"Belushi’s",                         addr:"161 Borough High Street", extra:"Stop 20: the ambitious finish. Bragging rights for anyone still standing. 🏆"},
 ];
 const MAPS = s => "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(s.name + ", " + s.addr + ", Bermondsey, London");
 
